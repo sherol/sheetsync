@@ -23,17 +23,8 @@ export interface CustomField {
   showInQuickLog?: boolean;
 }
 
-export type CategoryIcon =
-  | 'media'
-  | 'food'
-  | 'memories'
-  | 'mood'
-  | 'recipes'
-  | 'projects'
-  | 'people'
-  | 'presentations'
-  | 'ideas'
-  | 'prayer';
+/** Key into the icon library (see components/CategoryIcon). */
+export type CategoryIcon = string;
 
 export interface BibleTrackerDef {
   bookFieldId: string; // select field whose options are Bible book names

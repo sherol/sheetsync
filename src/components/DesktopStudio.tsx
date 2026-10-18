@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Settings2, Eye, EyeOff, Sparkles, Save, Database, ArrowUp, ArrowDown } from 'lucide-react';
 import { AppConfig, CategoryDef, CustomField, FieldType } from '../types';
 import { CategoryIcon } from './CategoryIcon';
+import { CategorySettings, COLOR_SWATCHES } from './CategorySettings';
+import { SYSTEM_TABS } from '../services/sheetsService';
 
 interface DesktopStudioProps {
   config: AppConfig;
@@ -9,6 +11,7 @@ interface DesktopStudioProps {
   onSaveToSheet: () => void;
   isSavingToSheet: boolean;
   onRequestDeleteField: (category: CategoryDef, field: CustomField) => void;
+  onRequestDeleteCategory: (category: CategoryDef) => void;
 }
 
 const FIELD_TYPE_LABELS: Record<FieldType, string> = {
@@ -32,6 +35,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   onSaveToSheet,
   isSavingToSheet,
   onRequestDeleteField,
+  onRequestDeleteCategory,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(config.categories[0]?.id ?? 'settings');
   const [isAddingField, setIsAddingField] = useState(false);
@@ -45,7 +49,9 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   const [newRequired, setNewRequired] = useState(false);
   const [newQuickLog, setNewQuickLog] = useState(true);
 
-  const category = config.categories.find((c) => c.id === activeTab);
+  const category =
+    config.categories.find((c) => c.id === activeTab) ??
+    (activeTab === 'settings' ? undefined : config.categories[0]);
 
   const updateCategory = (updated: CategoryDef) => {
     onUpdateConfig({
@@ -67,6 +73,30 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     const fields = [...cat.fields];
     [fields[index], fields[target]] = [fields[target], fields[index]];
     updateCategory({ ...cat, fields });
+  };
+
+  const addCategory = () => {
+    const taken = new Set([...config.categories.map((c) => c.sheetName), ...SYSTEM_TABS.map((t) => t.sheetName)]);
+    let n = 1;
+    while (taken.has(n === 1 ? 'New_Tab' : `New_Tab_${n}`)) n++;
+    const stamp = Date.now();
+    const created: CategoryDef = {
+      id: `c_${stamp}`,
+      label: n === 1 ? 'New Tab' : `New Tab ${n}`,
+      sheetName: n === 1 ? 'New_Tab' : `New_Tab_${n}`,
+      icon: 'star',
+      color: COLOR_SWATCHES[config.categories.length % COLOR_SWATCHES.length],
+      titleFieldId: `f_${stamp}_name`,
+      dateFieldId: `f_${stamp}_date`,
+      fields: [
+        { id: `f_${stamp}_name`, label: 'Name', type: 'text', required: true, showInQuickLog: true },
+        { id: `f_${stamp}_date`, label: 'Date', type: 'date', showInQuickLog: true },
+        { id: `f_${stamp}_notes`, label: 'Notes', type: 'notes', showInQuickLog: true },
+      ],
+    };
+    onUpdateConfig({ ...config, categories: [...config.categories, created] });
+    setActiveTab(created.id);
+    resetForm();
   };
 
   const moveCategory = (index: number, delta: number) => {
@@ -163,7 +193,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
         {/* Category list */}
         <nav className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-stone-800 bg-[#0d0f15]/80 p-2 flex md:flex-col gap-1 overflow-x-auto">
           {config.categories.map((c) => {
-            const active = c.id === activeTab;
+            const active = c.id === category?.id;
             return (
               <button
                 key={c.id}
@@ -183,6 +213,13 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
             );
           })}
           <button
+            onClick={addCategory}
+            className="shrink-0 px-3 py-2 rounded-xl flex items-center gap-2 text-xs text-left transition-all border border-dashed border-stone-700 text-stone-400 hover:text-white hover:border-stone-500 md:mt-1"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>New tab</span>
+          </button>
+          <button
             onClick={() => {
               setActiveTab('settings');
               resetForm();
@@ -201,17 +238,15 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
         <div className="flex-1 p-5 overflow-y-auto bg-[#0e1017]">
           {category && (
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <CategoryIcon name={category.icon} className="w-4 h-4" color={category.color} />
-                    {category.label}
-                  </h3>
-                  <p className="text-xs text-stone-400 mt-0.5">
-                    Sheet tab: <span className="font-mono text-stone-300">{category.sheetName}</span>
-                  </p>
-                </div>
+              <CategorySettings
+                key={category.id}
+                category={category}
+                onChange={updateCategory}
+                onRequestDelete={() => onRequestDeleteCategory(category)}
+              />
 
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400">Fields</h3>
                 <button
                   onClick={() => setIsAddingField(!isAddingField)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all text-white"

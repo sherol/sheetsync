@@ -1,12 +1,26 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, Plugin} from 'vite';
+
+// Embed public/favicon.svg in index.html as a data URI so the tab icon never
+// depends on a separate request (or a browser's cached failure of one).
+function inlineSvgFavicon(): Plugin {
+  return {
+    name: 'inline-svg-favicon',
+    transformIndexHtml(html) {
+      const svg = fs.readFileSync(path.resolve(__dirname, 'public/favicon.svg'), 'utf8');
+      const dataUri = `data:image/svg+xml,${encodeURIComponent(svg.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim())}`;
+      return html.replace(/href="\.\/favicon\.svg(\?[^"]*)?"/, `href="${dataUri}"`);
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     base: './',
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), inlineSvgFavicon()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

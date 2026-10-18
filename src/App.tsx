@@ -198,6 +198,28 @@ export default function App() {
     }
   };
 
+  // Destructive Confirmation: Delete Category
+  const requestDeleteCategory = (category: CategoryDef) => {
+    if (config.categories.length <= 1) return;
+    const count = entries.filter((e) => e.categoryId === category.id).length;
+    setConfirmModalState({
+      isOpen: true,
+      title: `Delete the "${category.label}" tab?`,
+      description: `It will be removed from the app${count ? ` along with its ${count} saved entr${count === 1 ? 'y' : 'ies'} on this device` : ''}. The ${category.sheetName} tab in your Google Sheet is not touched, so anything already synced stays there.`,
+      actionText: 'Delete Tab',
+      onConfirm: () => {
+        const remainingEntries = entries.filter((e) => e.categoryId !== category.id);
+        setEntries(remainingEntries);
+        StorageService.saveEntries(remainingEntries);
+        handleUpdateConfig({
+          ...config,
+          categories: config.categories.filter((c) => c.id !== category.id),
+        });
+        setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
   // Destructive Confirmation: Delete Custom Field
   const requestDeleteField = (category: CategoryDef, field: CustomField) => {
     setConfirmModalState({
@@ -276,6 +298,7 @@ export default function App() {
                   onSaveToSheet={handleSaveSchemaToSheet}
                   isSavingToSheet={isSavingToSheet}
                   onRequestDeleteField={requestDeleteField}
+                  onRequestDeleteCategory={requestDeleteCategory}
                 />
               </div>
 
