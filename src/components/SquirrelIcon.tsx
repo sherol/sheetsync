@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId } from 'react';
 
 interface SquirrelIconProps {
   className?: string;
@@ -6,57 +6,65 @@ interface SquirrelIconProps {
   alt?: string;
 }
 
-export const SquirrelIcon: React.FC<SquirrelIconProps> = ({
-  className = 'w-6 h-6',
-  size,
-  alt = 'SheetSync Squirrel',
-}) => {
-  const [hasError, setHasError] = useState(false);
-  const basePath = import.meta.env.BASE_URL || './';
-  const iconSrc = `${basePath.endsWith('/') ? basePath : basePath + '/'}squirrel-icon.png`;
-
-  if (hasError) {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 64 64"
-        width={size || 24}
-        height={size || 24}
-        className={className}
-      >
-        <defs>
-          <linearGradient id="sq-rainbow-fallback" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f43f5e" />
-            <stop offset="25%" stopColor="#fb923c" />
-            <stop offset="50%" stopColor="#facc15" />
-            <stop offset="75%" stopColor="#10b981" />
-            <stop offset="100%" stopColor="#a855f7" />
-          </linearGradient>
-        </defs>
-        <rect width="64" height="64" rx="16" fill="url(#sq-rainbow-fallback)" />
-        <ellipse cx="32" cy="38" rx="16" ry="18" fill="#8d5b34" />
-        <ellipse cx="32" cy="24" rx="13" ry="12" fill="#a46d42" />
-        <circle cx="27" cy="22" r="3" fill="#181a24" />
-        <circle cx="26" cy="21" r="1.1" fill="#ffffff" />
-        <circle cx="37" cy="22" r="3" fill="#181a24" />
-        <circle cx="36" cy="21" r="1.1" fill="#ffffff" />
-        <ellipse cx="24" cy="27" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.6" />
-        <ellipse cx="40" cy="27" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.6" />
-        <path d="M 30 26 Q 32 28 34 26" fill="none" stroke="#181a24" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
+/**
+ * SheetSync logo: white squirrel outline on a rainbow tile. Same artwork as
+ * public/favicon.svg, inlined so it renders without a separate request.
+ */
+export const SquirrelIcon: React.FC<SquirrelIconProps> = ({ className = 'w-6 h-6', size, alt = 'SheetSync' }) => {
+  // Gradient ids must be unique per instance; strip the punctuation useId adds so url(#...) references stay valid.
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const id = (name: string) => `sq-${uid}-${name}`;
 
   return (
-    <img
-      src={iconSrc}
-      alt={alt}
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 100 100"
       width={size}
       height={size}
-      onError={() => setHasError(true)}
-      className={`inline-block select-none object-contain ${className}`}
-      draggable={false}
-    />
+      className={className}
+      role="img"
+      aria-label={alt}
+    >
+      <defs>
+        <linearGradient id={id('base')} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5b21b6" />
+          <stop offset="0.5" stopColor="#ec4899" />
+          <stop offset="1" stopColor="#facc15" />
+        </linearGradient>
+        <radialGradient id={id('tr')} cx="1" cy="0" r="0.75">
+          <stop offset="0" stopColor="#ff3b30" />
+          <stop offset="1" stopColor="#ff3b30" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={id('r')} cx="1" cy="0.6" r="0.55">
+          <stop offset="0" stopColor="#fde047" />
+          <stop offset="1" stopColor="#fde047" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={id('bl')} cx="0" cy="0.85" r="0.7">
+          <stop offset="0" stopColor="#0ea5e9" />
+          <stop offset="1" stopColor="#0ea5e9" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={id('b')} cx="0.5" cy="1" r="0.5">
+          <stop offset="0" stopColor="#22c55e" />
+          <stop offset="1" stopColor="#22c55e" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={id('tl')} cx="0" cy="0" r="0.6">
+          <stop offset="0" stopColor="#4c1d95" />
+          <stop offset="1" stopColor="#4c1d95" stopOpacity="0" />
+        </radialGradient>
+        <clipPath id={id('tile')}>
+          <rect width="100" height="100" rx="22" />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${id('tile')})`}>
+        {['base', 'tr', 'r', 'bl', 'b', 'tl'].map((g) => (
+          <rect key={g} width="100" height="100" fill={`url(#${id(g)})`} />
+        ))}
+      </g>
+      <g fill="none" stroke="#fff" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 86 L58 86 C66 80 66 62 58 54 C52 48 47 46 45 42 C47 36 46 30 42 26 C46 21 46 14 41 14 C37 14 36 18 36 21 C34 17 31 14 28 16 C25 18 26 22 29 24 C23 23 17 28 15 34 C14 37 12 39 13 41 C16 45 21 45 24 46 C25 49 20 52 15 53 C12 54 12 58 15 58 C21 57 26 58 30 60 C26 66 25 73 27 79 C21 79 15 81 15 86 Z" />
+        <path d="M58 54 C52 44 52 28 62 20 C72 13 86 20 86 32 C86 36 85 39 84 41 C80 36 74 36 72 40 C70 45 75 52 78 60 C82 72 74 84 60 86" />
+        <path d="M48 61 C40 63 37 70 40 77 C33 77 27 80 28 86" />
+      </g>
+    </svg>
   );
 };
-
