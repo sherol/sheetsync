@@ -12,6 +12,7 @@ interface DesktopStudioProps {
   isSavingToSheet: boolean;
   onRequestDeleteField: (category: CategoryDef, field: CustomField) => void;
   onRequestDeleteCategory: (category: CategoryDef) => void;
+  onRenameSheetTab: (category: CategoryDef, newName: string) => Promise<string>;
 }
 
 const FIELD_TYPE_LABELS: Record<FieldType, string> = {
@@ -36,6 +37,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   isSavingToSheet,
   onRequestDeleteField,
   onRequestDeleteCategory,
+  onRenameSheetTab,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(config.categories[0]?.id ?? 'settings');
   const [isAddingField, setIsAddingField] = useState(false);
@@ -243,6 +245,11 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                 category={category}
                 onChange={updateCategory}
                 onRequestDelete={() => onRequestDeleteCategory(category)}
+                onRenameSheet={(name) => onRenameSheetTab(category, name)}
+                takenSheetNames={[
+                  ...config.categories.filter((c) => c.id !== category.id).map((c) => c.sheetName),
+                  ...SYSTEM_TABS.map((t) => t.sheetName),
+                ]}
               />
 
               <div className="flex items-center justify-between gap-3 pt-1">

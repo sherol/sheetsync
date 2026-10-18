@@ -12,6 +12,9 @@ interface CategorySettingsProps {
   category: CategoryDef;
   onChange: (updated: CategoryDef) => void;
   onRequestDelete: () => void;
+  /** Rename the Google Sheet tab; resolves with a message for the user. */
+  onRenameSheet: (newName: string) => Promise<string>;
+  takenSheetNames: string[];
 }
 
 const inputClass =
@@ -20,7 +23,45 @@ const inputClass =
 /** Split a camelCase icon key into searchable words ("handHeart" -> "hand heart"). */
 const words = (key: string) => key.replace(/([a-z])([A-Z0-9])/g, '$1 $2').toLowerCase();
 
-export const CategorySettings: React.FC<CategorySettingsProps> = ({ category, onChange, onRequestDelete }) => {
+/** Make a valid, readable Google Sheet tab name from free text. */
+export const toSheetName = (text: string) =>
+  text
+    .trim()
+    .replace(/&/g, 'and')
+    .replace(/[\[\]:*?/\\']/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 90);
+
+export const CategorySettings: React.FC<CategorySettingsProps> = ({
+  category,
+  onChange,
+  onRequestDelete,
+  onRenameSheet,
+  takenSheetNames,
+}) => {
+  const [sheetDraft, setSheetDraft] = useState(category.sheetName);
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const [sheetMsg, setSheetMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const cleanDraft = toSheetName(sheetDraft);
+  const draftTaken = cleanDraft !== category.sheetName && takenSheetNames.includes(cleanDraft);
+  const canRenameSheet = !!cleanDraft && cleanDraft !== category.sheetName && !draftTaken && !sheetBusy;
+
+  const renameSheet = async () => {
+    if (!canRenameSheet) return;
+    setSheetBusy(true);
+    setSheetMsg(null);
+    try {
+      const text = await onRenameSheet(cleanDraft);
+      setSheetDraft(cleanDraft);
+      setSheetMsg({ ok: true, text });
+    } catch (e: any) {
+      setSheetMsg({ ok: false, text: e?.message || 'Rename failed' });
+    } finally {
+      setSheetBusy(false);
+    }
+  };
+
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -62,9 +103,48 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ category, on
               }}
               className={inputClass}
             />
-            <p className="text-[10px] text-stone-500 mt-1">
-              Google Sheet tab: <span className="font-mono text-stone-400">{category.sheetName}</span> (kept the same when
-              you rename, so existing rows stay connected)
+          </div>
+
+          <div>
+            <label htmlFor="sheet-name" className="block text-[11px] font-medium text-stone-300 mb-1">
+              Google Sheet tab
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="sheet-name"
+                type="text"
+                value={sheetDraft}
+                onChange={(e) => {
+                  setSheetDraft(e.target.value);
+                  setSheetMsg(null);
+                }}
+                className={`${inputClass} font-mono`}
+              />
+              <button
+                type="button"
+                onClick={() => setSheetDraft(toSheetName(category.label))}
+                className="shrink-0 px-2.5 text-[11px] font-semibold rounded-xl border border-stone-700 text-stone-300 hover:text-white"
+                title="Use the tab name"
+              >
+                Match name
+              </button>
+              <button
+                type="button"
+                onClick={renameSheet}
+                disabled={!canRenameSheet}
+                className="shrink-0 px-3 text-[11px] font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
+              >
+                {sheetBusy ? 'Renaming…' : 'Rename sheet tab'}
+              </button>
+            </div>
+            <p className={`text-[10px] mt-1 ${sheetMsg ? (sheetMsg.ok ? 'text-emerald-400' : 'text-rose-400') : draftTaken ? 'text-rose-400' : 'text-stone-500'}`}>
+              {sheetMsg
+                ? sheetMsg.text
+                : draftTaken
+                  ? `Another tab already uses "${cleanDraft}".`
+                  : cleanDraft !== sheetDraft.trim() && cleanDraft
+                    ? `Will be saved as "${cleanDraft}".`
+                    : 'Renaming the app tab above does not change this. Use the button to rename the sheet tab too; its rows stay in place.'}
             </p>
           </div>
 

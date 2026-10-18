@@ -187,6 +187,41 @@ export class SheetsService {
   }
 
   /**
+   * Rename a tab in the spreadsheet. Returns false if no tab with the old name exists.
+   */
+  static async renameTab(accessToken: string, spreadsheetId: string, oldName: string, newName: string): Promise<boolean> {
+    const info = await this.getSpreadsheet(accessToken, spreadsheetId);
+    const sheets: any[] = info.sheets || [];
+    if (sheets.some((s) => s.properties.title === newName)) {
+      throw new Error(`A tab named "${newName}" already exists in the spreadsheet.`);
+    }
+    const sheet = sheets.find((s) => s.properties.title === oldName);
+    if (!sheet) return false;
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: sheet.properties.sheetId, title: newName },
+              fields: 'title',
+            },
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Could not rename tab: ${err}`);
+    }
+    return true;
+  }
+
+  /**
    * Append a row to a sheet tab
    */
   static async appendRow(accessToken: string, spreadsheetId: string, sheetName: string, rowValues: any[]): Promise<any> {

@@ -198,6 +198,24 @@ export default function App() {
     }
   };
 
+  // Rename a category's Google Sheet tab (in the sheet too, when connected)
+  const handleRenameSheetTab = async (category: CategoryDef, newName: string): Promise<string> => {
+    let message = `Sheet tab is now "${newName}". It will be created there on the next save.`;
+    if (accessToken && config.spreadsheetId) {
+      const renamed = await SheetsService.renameTab(accessToken, config.spreadsheetId, category.sheetName, newName);
+      message = renamed
+        ? `Renamed "${category.sheetName}" to "${newName}" in your Google Sheet.`
+        : `No "${category.sheetName}" tab in your sheet yet; "${newName}" will be created on the next save.`;
+    } else if (config.spreadsheetId) {
+      message = `Sheet tab is now "${newName}" in the app. Sign in with Google and rename "${category.sheetName}" in the sheet too, or a new tab will be created on the next save.`;
+    }
+    handleUpdateConfig({
+      ...config,
+      categories: config.categories.map((c) => (c.id === category.id ? { ...c, sheetName: newName } : c)),
+    });
+    return message;
+  };
+
   // Destructive Confirmation: Delete Category
   const requestDeleteCategory = (category: CategoryDef) => {
     if (config.categories.length <= 1) return;
@@ -299,6 +317,7 @@ export default function App() {
                   isSavingToSheet={isSavingToSheet}
                   onRequestDeleteField={requestDeleteField}
                   onRequestDeleteCategory={requestDeleteCategory}
+                  onRenameSheetTab={handleRenameSheetTab}
                 />
               </div>
 
