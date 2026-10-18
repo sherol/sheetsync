@@ -69,6 +69,14 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     updateCategory({ ...cat, fields });
   };
 
+  const moveCategory = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= config.categories.length) return;
+    const categories = [...config.categories];
+    [categories[index], categories[target]] = [categories[target], categories[index]];
+    onUpdateConfig({ ...config, categories });
+  };
+
   const resetForm = () => {
     setNewLabel('');
     setNewType('text');
@@ -400,33 +408,34 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
           {activeTab === 'settings' && (
             <div className="space-y-4 max-w-xl">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400">Mobile Logger</h3>
-                <p className="text-xs text-stone-400 mt-0.5">Choose which category opens first.</p>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400">Home Screen Order</h3>
+                <p className="text-xs text-stone-400 mt-0.5">The app opens on a list of every category, top to bottom in this order.</p>
               </div>
 
-              <div className="p-4 rounded-2xl border border-stone-800 bg-[#141620] space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-stone-300 mb-2">Opening category</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {config.categories.map((c) => {
-                      const active = config.defaultCategoryId === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => onUpdateConfig({ ...config, defaultCategoryId: c.id })}
-                          className={`py-2 px-2 text-xs rounded-xl font-bold border flex items-center gap-1.5 justify-center transition-all ${
-                            active ? 'text-white' : 'border-stone-800 bg-stone-900 text-stone-400 hover:text-stone-200'
-                          }`}
-                          style={active ? { backgroundColor: `${c.color}22`, borderColor: c.color } : undefined}
-                        >
-                          <CategoryIcon name={c.icon} className="w-3.5 h-3.5" color={c.color} />
-                          <span className="truncate">{c.label}</span>
-                        </button>
-                      );
-                    })}
+              <div className="p-2 rounded-2xl border border-stone-800 bg-[#141620] space-y-1">
+                {config.categories.map((c, idx) => (
+                  <div key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-stone-900/60">
+                    <span className="w-5 text-center text-[11px] font-mono text-stone-500">{idx + 1}</span>
+                    <CategoryIcon name={c.icon} className="w-4 h-4 shrink-0" color={c.color} />
+                    <span className="flex-1 text-xs text-stone-200 truncate">{c.label}</span>
+                    <button
+                      onClick={() => moveCategory(idx, -1)}
+                      disabled={idx === 0}
+                      className="p-1.5 text-stone-500 hover:text-stone-200 disabled:opacity-30 rounded-lg"
+                      title="Move up"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => moveCategory(idx, 1)}
+                      disabled={idx === config.categories.length - 1}
+                      className="p-1.5 text-stone-500 hover:text-stone-200 disabled:opacity-30 rounded-lg"
+                      title="Move down"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </div>
+                ))}
               </div>
 
               <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/30 to-blue-950/30 border border-purple-500/20 text-xs text-stone-300 space-y-2">

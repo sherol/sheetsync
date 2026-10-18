@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Send, CheckCircle, ChevronDown, ChevronUp, Pencil, X, ExternalLink, AlertCircle } from 'lucide-react';
+import { Send, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, X, ExternalLink, AlertCircle } from 'lucide-react';
 import { AppConfig, CategoryDef, Entry } from '../types';
 import { SquirrelIcon } from './SquirrelIcon';
 import { CategoryIcon } from './CategoryIcon';
@@ -39,10 +39,9 @@ export const MobileView: React.FC<MobileViewProps> = ({
   isInDesktopFrame = false,
 }) => {
   const categories = config.categories;
-  const [activeId, setActiveId] = useState<string>(
-    categories.some((c) => c.id === config.defaultCategoryId) ? config.defaultCategoryId : categories[0]?.id
-  );
-  const category = categories.find((c) => c.id === activeId) ?? categories[0];
+  // null = home screen listing every category
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const category = activeId ? categories.find((c) => c.id === activeId) : undefined;
 
   const [values, setValues] = useState<Record<string, any>>(() => (category ? blankValues(category) : {}));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -50,11 +49,28 @@ export const MobileView: React.FC<MobileViewProps> = ({
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
+    if (!isInDesktopFrame) window.scrollTo(0, 0);
+  }, [activeId]);
+
+  useEffect(() => {
     if (!category) return;
     setValues(blankValues(category));
     setEditingId(null);
     setShowMore(false);
   }, [category?.id]);
+
+  const summaries = useMemo(
+    () =>
+      categories.map((c) => {
+        const mine = entries.filter((e) => e.categoryId === c.id);
+        const last = mine.reduce<string | null>((max, e) => {
+          const d = entryDate(c, e);
+          return max === null || d > max ? d : max;
+        }, null);
+        return { category: c, count: mine.length, last };
+      }),
+    [categories, entries]
+  );
 
   const recent = useMemo(() => {
     if (!category) return [];
@@ -67,8 +83,52 @@ export const MobileView: React.FC<MobileViewProps> = ({
       .slice(0, 10);
   }, [entries, category]);
 
+  const shellClass = `flex flex-col bg-[#0b0c10] text-stone-100 ${
+    isInDesktopFrame
+      ? 'h-full'
+      : 'min-h-[calc(100vh-4rem)] w-full max-w-xl md:max-w-2xl mx-auto shadow-2xl md:rounded-3xl md:my-4 md:border border-stone-800'
+  }`;
+  // Below the app's own sticky navbar on a full page; at the top inside the desktop phone frame.
+  const stickyTop = isInDesktopFrame ? 'top-0' : 'top-16';
+
   if (!category) {
-    return <div className="p-6 text-xs text-stone-400">No categories configured.</div>;
+    return (
+      <div className={shellClass}>
+        <div className={`sticky ${stickyTop} z-20 bg-[#10121a]/95 backdrop-blur-md border-b border-stone-800 px-4 py-3 shrink-0`}>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl overflow-hidden shadow-xs shrink-0">
+              <SquirrelIcon className="w-full h-full object-cover" />
+            </div>
+            <span className="font-extrabold text-sm tracking-tight rainbow-text">SheetSync</span>
+          </div>
+        </div>
+
+        <nav className="flex-1 p-4 overflow-y-auto space-y-2" aria-label="Categories">
+          {summaries.map(({ category: c, count, last }) => (
+            <button
+              key={c.id}
+              onClick={() => setActiveId(c.id)}
+              className="w-full p-3.5 rounded-2xl border border-stone-800 bg-[#13151f] hover:border-stone-600 active:scale-[0.99] flex items-center gap-3 text-left transition-all"
+            >
+              <span
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                style={{ backgroundColor: `${c.color}1f`, borderColor: `${c.color}55` }}
+              >
+                <CategoryIcon name={c.icon} className="w-5 h-5" color={c.color} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-white truncate">{c.label}</span>
+                <span className="block text-[11px] text-stone-400">
+                  {count === 0 ? 'No entries yet' : `${count} entr${count === 1 ? 'y' : 'ies'} · last ${last}`}
+                </span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-stone-500 shrink-0" />
+            </button>
+          ))}
+          {categories.length === 0 && <p className="text-xs text-stone-400">No categories configured.</p>}
+        </nav>
+      </div>
+    );
   }
 
   const quickFields = category.fields.filter((f) => f.showInQuickLog !== false);
@@ -109,41 +169,20 @@ export const MobileView: React.FC<MobileViewProps> = ({
   const linkFields = category.fields.filter((f) => f.type === 'links');
 
   return (
-    <div
-      className={`flex flex-col bg-[#0b0c10] text-stone-100 ${
-        isInDesktopFrame
-          ? 'h-full'
-          : 'min-h-[calc(100vh-4rem)] w-full max-w-xl md:max-w-2xl mx-auto shadow-2xl md:rounded-3xl md:my-4 md:border border-stone-800'
-      }`}
-    >
-      {/* Top bar with category switcher */}
-      <div className="sticky top-0 z-20 bg-[#10121a]/95 backdrop-blur-md border-b border-stone-800 px-4 pt-3 pb-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl overflow-hidden shadow-xs shrink-0">
-            <SquirrelIcon className="w-full h-full object-cover" />
-          </div>
-          <span className="font-extrabold text-sm tracking-tight rainbow-text">SheetSync</span>
-        </div>
-
-        <div className="mt-3 -mx-4 px-4 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]" role="tablist">
-          {categories.map((c) => {
-            const active = c.id === category.id;
-            return (
-              <button
-                key={c.id}
-                role="tab"
-                aria-selected={active}
-                onClick={() => setActiveId(c.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-semibold border transition-all ${
-                  active ? 'text-white' : 'border-stone-800 bg-stone-900/80 text-stone-400 hover:text-stone-200'
-                }`}
-                style={active ? { backgroundColor: `${c.color}2e`, borderColor: `${c.color}99` } : undefined}
-              >
-                <CategoryIcon name={c.icon} className="w-3.5 h-3.5" color={c.color} />
-                <span>{c.label}</span>
-              </button>
-            );
-          })}
+    <div className={shellClass}>
+      <div className={`sticky ${stickyTop} z-20 bg-[#10121a]/95 backdrop-blur-md border-b border-stone-800 px-2 py-2 shrink-0`}>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setActiveId(null)}
+            className="flex items-center gap-0.5 pl-1 pr-2.5 py-1.5 rounded-xl text-xs font-semibold text-stone-300 hover:text-white hover:bg-stone-800/60"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            All
+          </button>
+          <span className="flex items-center gap-1.5 text-sm font-extrabold text-white min-w-0">
+            <CategoryIcon name={category.icon} className="w-4 h-4 shrink-0" color={category.color} />
+            <span className="truncate">{category.label}</span>
+          </span>
         </div>
       </div>
 
