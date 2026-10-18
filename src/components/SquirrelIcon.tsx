@@ -4,16 +4,42 @@ interface SquirrelIconProps {
   className?: string;
   size?: number;
   alt?: string;
+  /** 'outline' = white outline on the rainbow tile (favicon); 'mascot' = brown cartoon squirrel. */
+  variant?: 'outline' | 'mascot';
 }
 
+const mascotSrc = () => {
+  const base = import.meta.env.BASE_URL || './';
+  return `${base.endsWith('/') ? base : `${base}/`}squirrel-icon.png`;
+};
+
 /**
- * SheetSync logo: white squirrel outline on a rainbow tile. Same artwork as
- * public/favicon.svg, inlined so it renders without a separate request.
+ * SheetSync logo. The default is the white squirrel outline on a rainbow tile,
+ * the same artwork as public/favicon.svg, inlined so it renders without a
+ * separate request. The 'mascot' variant is the brown cartoon squirrel.
  */
-export const SquirrelIcon: React.FC<SquirrelIconProps> = ({ className = 'w-6 h-6', size, alt = 'SheetSync' }) => {
+export const SquirrelIcon: React.FC<SquirrelIconProps> = ({
+  className = 'w-6 h-6',
+  size,
+  alt = 'SheetSync',
+  variant = 'outline',
+}) => {
   // Gradient ids must be unique per instance; strip the punctuation useId adds so url(#...) references stay valid.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const id = (name: string) => `sq-${uid}-${name}`;
+
+  if (variant === 'mascot') {
+    return (
+      <img
+        src={mascotSrc()}
+        alt={alt}
+        width={size}
+        height={size}
+        className={`select-none object-cover ${className}`}
+        draggable={false}
+      />
+    );
+  }
 
   return (
     <svg
