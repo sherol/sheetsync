@@ -1,99 +1,70 @@
-export type FieldType = 
-  | 'text' 
-  | 'number' 
-  | 'rating' 
-  | 'boolean' 
-  | 'select' 
-  | 'multiselect' 
-  | 'stepper' 
-  | 'notes';
+export type FieldType =
+  | 'text'
+  | 'notes'
+  | 'number'
+  | 'rating'
+  | 'select'
+  | 'date'
+  | 'time'
+  | 'links'
+  | 'relation';
 
 export interface CustomField {
   id: string;
-  name: string;
   label: string;
   type: FieldType;
-  options?: string[]; // for select/multiselect
-  unit?: string; // e.g. "hrs", "glasses", "pts"
-  min?: number;
-  max?: number;
-  step?: number;
+  options?: string[]; // for select
+  unit?: string; // for number, e.g. "mg", "cups"
+  placeholder?: string;
+  min?: number; // for rating
+  max?: number; // for rating
+  relatedCategoryId?: string; // for relation: pick entries from this category by their title field
   required?: boolean;
-  defaultValue?: any;
   showInQuickLog?: boolean;
-  category: 'life' | 'health' | 'prayer' | 'habits';
 }
 
-export interface HabitItem {
-  id: string;
-  name: string;
-  category: 'life' | 'health' | 'prayer' | 'other';
-  frequency: 'daily' | 'weekdays' | 'weekends';
-  targetDaysPerWeek: number;
-  streak: number;
-  lastCompletedDate?: string; // YYYY-MM-DD
+export type CategoryIcon =
+  | 'media'
+  | 'food'
+  | 'memories'
+  | 'mood'
+  | 'recipes'
+  | 'projects'
+  | 'people'
+  | 'presentations'
+  | 'ideas'
+  | 'prayer';
+
+export interface BibleTrackerDef {
+  bookFieldId: string; // select field whose options are Bible book names
+  chaptersFieldId: string; // text field such as "1-3, 5"
 }
 
-export interface LifeLogEntry {
+export interface CategoryDef {
   id: string;
-  timestamp: string; // ISO string
-  date: string; // YYYY-MM-DD
-  mood: number; // 1-10
-  energy: 'Low' | 'Medium' | 'High' | 'Peak';
-  gratitude: string;
-  highlight: string;
-  notes?: string;
-  tags?: string[];
-  customValues?: Record<string, any>;
+  label: string;
+  sheetName: string; // Google Sheet tab name
+  icon: CategoryIcon;
+  color: string; // hex accent
+  titleFieldId?: string; // field that names an entry in lists and relation pickers
+  dateFieldId?: string; // field that dates an entry for sorting and monthly reports
+  bibleTracker?: BibleTrackerDef; // show Bible study progress for this category
+  fields: CustomField[];
 }
 
-export interface HealthLogEntry {
+export interface Entry {
   id: string;
-  timestamp: string;
-  date: string;
-  sleepHours: number;
-  waterGlasses: number;
-  workoutDone: boolean;
-  workoutType?: string;
-  workoutDurationMin?: number;
-  stressLevel: 1 | 2 | 3 | 4 | 5;
-  nutritionQuality?: 'Clean' | 'Balanced' | 'Indulgent' | 'Fasting';
-  symptomsOrVitals?: string;
-  customValues?: Record<string, any>;
-}
-
-export interface PrayerLogEntry {
-  id: string;
-  timestamp: string;
-  date: string;
-  prayerFocus: string;
-  scriptureReference?: string;
-  meditationMinutes: number;
-  isAnswered: boolean;
-  answeredDate?: string;
-  answeredNote?: string;
-  tags?: string[];
-  customValues?: Record<string, any>;
-}
-
-export interface HabitLogEntry {
-  id: string;
-  timestamp: string;
-  date: string; // YYYY-MM-DD
-  completedHabitIds: string[];
-  notes?: string;
+  categoryId: string;
+  timestamp: string; // ISO string, last saved
+  values: Record<string, any>;
 }
 
 export interface AppConfig {
+  schemaVersion: number;
   appName: string;
-  accentColor: string;
-  lifeFields: CustomField[];
-  healthFields: CustomField[];
-  prayerFields: CustomField[];
-  habitFields: CustomField[];
-  habitsList: HabitItem[];
+  categories: CategoryDef[];
+  defaultCategoryId: string;
   enableHaptics: boolean;
-  quickEntryDefaultTab: 'life' | 'health' | 'prayer' | 'habits';
   spreadsheetId: string | null;
   spreadsheetName: string | null;
   lastSyncedAt: string | null;

@@ -65,7 +65,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
     setIsCreating(true);
     setStatusMessage(null);
     try {
-      const res = await SheetsService.createMasterSpreadsheet(accessToken, newTitle || 'SheetSync - Personal Tracker');
+      const res = await SheetsService.createMasterSpreadsheet(accessToken, config.categories, newTitle || 'SheetSync - Personal Tracker');
       onUpdateSpreadsheet(res.id, res.name);
       setStatusMessage({ type: 'success', text: `Created and linked "${res.name}"!` });
       setTimeout(() => {
@@ -83,7 +83,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
     setIsCreating(true);
     setStatusMessage(null);
     try {
-      await SheetsService.ensureTabsExist(accessToken, sheet.id);
+      await SheetsService.ensureTabsExist(accessToken, sheet.id, config.categories);
       onUpdateSpreadsheet(sheet.id, sheet.name);
       setStatusMessage({ type: 'success', text: `Connected to "${sheet.name}" and ensured tabs!` });
       setTimeout(() => {
@@ -113,7 +113,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
     setIsCreating(true);
     try {
       const details = await SheetsService.getSpreadsheet(accessToken, id);
-      await SheetsService.ensureTabsExist(accessToken, id);
+      await SheetsService.ensureTabsExist(accessToken, id, config.categories);
       const title = details.properties?.title || 'Google Sheet';
       onUpdateSpreadsheet(id, title);
       setStatusMessage({ type: 'success', text: `Linked "${title}" successfully!` });
@@ -256,7 +256,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. SheetSync - Life, Health & Prayer"
+                  placeholder="e.g. SheetSync - Personal Tracker"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
@@ -266,24 +266,14 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
                   SheetSync will automatically initialize:
                 </span>
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <span className="flex items-center gap-1.5 text-amber-300">
-                    <Check className="w-3.5 h-3.5 text-amber-400 stroke-[3]" /> Life_Logs
-                  </span>
-                  <span className="flex items-center gap-1.5 text-emerald-300">
-                    <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" /> Health_Logs
-                  </span>
-                  <span className="flex items-center gap-1.5 text-purple-300">
-                    <Check className="w-3.5 h-3.5 text-purple-400 stroke-[3]" /> Prayer_Logs
-                  </span>
-                  <span className="flex items-center gap-1.5 text-orange-300">
-                    <Check className="w-3.5 h-3.5 text-orange-400 stroke-[3]" /> Habit_Logs
-                  </span>
-                  <span className="flex items-center gap-1.5 text-pink-300">
-                    <Check className="w-3.5 h-3.5 text-pink-400 stroke-[3]" /> Monthly_Reports
-                  </span>
-                  <span className="flex items-center gap-1.5 text-cyan-300">
-                    <Check className="w-3.5 h-3.5 text-cyan-400 stroke-[3]" /> App_Config
-                  </span>
+                  {[...config.categories.map((c) => ({ name: c.sheetName, color: c.color })),
+                    { name: 'Monthly_Reports', color: '#a8a29e' },
+                    { name: 'App_Config', color: '#a8a29e' },
+                  ].map((t) => (
+                    <span key={t.name} className="flex items-center gap-1.5" style={{ color: t.color }}>
+                      <Check className="w-3.5 h-3.5 stroke-[3]" /> {t.name}
+                    </span>
+                  ))}
                 </div>
               </div>
 

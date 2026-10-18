@@ -112,7 +112,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Settings2 className={`w-3.5 h-3.5 ${currentView === 'schema-editor' ? 'text-rose-400' : 'text-stone-400'}`} />
-            <span>Desktop Schema Editor</span>
+            <span>Category Studio</span>
           </button>
 
           <button
@@ -145,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={() => onViewChange('schema-editor')}
             className={`p-2 rounded-lg transition-colors ${currentView === 'schema-editor' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-stone-400'}`}
-            title="Schema Editor"
+            title="Category Studio"
           >
             <Settings2 className="w-4 h-4" />
           </button>

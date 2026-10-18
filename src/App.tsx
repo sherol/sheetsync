@@ -11,20 +11,9 @@ import {
   logout, 
   setAccessTokenManually 
 } from './services/auth';
-import { 
-  StorageService 
-} from './services/storageService';
+import { StorageService } from './services/storageService';
 import { SheetsService } from './services/sheetsService';
-import { 
-  AppConfig, 
-  SyncStatus, 
-  LifeLogEntry, 
-  HealthLogEntry, 
-  PrayerLogEntry, 
-  HabitLogEntry, 
-  CustomField, 
-  HabitItem 
-} from './types';
+import { AppConfig, SyncStatus, Entry, CategoryDef, CustomField } from './types';
 import { Navbar, AppViewMode } from './components/Navbar';
 import { DesktopStudio } from './components/DesktopStudio';
 import { MobileView } from './components/MobileView';
@@ -52,11 +41,8 @@ export default function App() {
   // App Configuration
   const [config, setConfig] = useState<AppConfig>(() => StorageService.getConfig());
 
-  // Data logs
-  const [lifeLogs, setLifeLogs] = useState<LifeLogEntry[]>(() => StorageService.getLifeLogs());
-  const [healthLogs, setHealthLogs] = useState<HealthLogEntry[]>(() => StorageService.getHealthLogs());
-  const [prayerLogs, setPrayerLogs] = useState<PrayerLogEntry[]>(() => StorageService.getPrayerLogs());
-  const [habitLogs, setHabitLogs] = useState<HabitLogEntry[]>(() => StorageService.getHabitLogs());
+  // Logged entries for every category
+  const [entries, setEntries] = useState<Entry[]>(() => StorageService.getEntries());
 
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -83,14 +69,6 @@ export default function App() {
     actionText: 'Delete',
     onConfirm: () => {},
   });
-
-  // Today's Date
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayHabitLog = habitLogs.find((h) => h.date === todayStr);
-  const habitsCheckedToday = todayHabitLog ? todayHabitLog.completedHabitIds : [];
-  const todayLifeLog = lifeLogs.find((l) => l.date === todayStr);
-  const todayHealthLog = healthLogs.find((h) => h.date === todayStr);
-  const todayPrayerLogs = prayerLogs.filter((p) => p.date === todayStr);
 
   // Initialize auth listener safely
   useEffect(() => {
@@ -175,32 +153,28 @@ export default function App() {
     }
   };
 
-  // 1. Save Life Log
-  const handleSaveLifeLog = async (logData: Omit<LifeLogEntry, 'id' | 'timestamp'>) => {
-    const newEntry: LifeLogEntry = {
-      ...logData,
-      id: `life_${Date.now()}`,
+  // Save (or update) an entry in any category
+  const handleSaveEntry = async (categoryId: string, values: Record<string, any>, existingId?: string) => {
+    const category = config.categories.find((c) => c.id === categoryId);
+    if (!category) return;
+
+    const entry: Entry = {
+      id: existingId ?? `${categoryId}_${Date.now()}`,
+      categoryId,
       timestamp: new Date().toISOString(),
+      values,
     };
 
-    const updated = [newEntry, ...lifeLogs.filter(l => l.date !== logData.date)];
-    setLifeLogs(updated);
-    StorageService.saveLifeLogs(updated);
+    const updated = existingId
+      ? entries.map((e) => (e.id === existingId ? entry : e))
+      : [entry, ...entries];
+    setEntries(updated);
+    StorageService.saveEntries(updated);
 
     if (accessToken && config.spreadsheetId) {
       setSyncStatus({ state: 'syncing', pendingCount: 1 });
       try {
-        await SheetsService.appendRow(accessToken, config.spreadsheetId, 'Life_Logs', [
-          newEntry.timestamp,
-          newEntry.date,
-          newEntry.mood,
-          newEntry.energy,
-          newEntry.gratitude,
-          newEntry.highlight,
-          newEntry.notes || '',
-          (newEntry.tags || []).join(', '),
-          JSON.stringify(newEntry.customValues || {}),
-        ]);
+        await SheetsService.upsertEntry(accessToken, config.spreadsheetId, category, entry);
         setSyncStatus({ state: 'synced', pendingCount: 0 });
         setTimeout(() => setSyncStatus({ state: 'idle', pendingCount: 0 }), 2500);
       } catch (err: any) {
@@ -209,173 +183,35 @@ export default function App() {
     }
   };
 
-  // 2. Save Health Log
-  const handleSaveHealthLog = async (logData: Omit<HealthLogEntry, 'id' | 'timestamp'>) => {
-    const newEntry: HealthLogEntry = {
-      ...logData,
-      id: `health_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    const updated = [newEntry, ...healthLogs.filter(h => h.date !== logData.date)];
-    setHealthLogs(updated);
-    StorageService.saveHealthLogs(updated);
-
-    if (accessToken && config.spreadsheetId) {
-      setSyncStatus({ state: 'syncing', pendingCount: 1 });
-      try {
-        await SheetsService.appendRow(accessToken, config.spreadsheetId, 'Health_Logs', [
-          newEntry.timestamp,
-          newEntry.date,
-          newEntry.sleepHours,
-          newEntry.waterGlasses,
-          newEntry.workoutDone ? 'YES' : 'NO',
-          newEntry.workoutType || '',
-          newEntry.workoutDurationMin || '',
-          newEntry.stressLevel,
-          newEntry.nutritionQuality || '',
-          newEntry.symptomsOrVitals || '',
-          JSON.stringify(newEntry.customValues || {}),
-        ]);
-        setSyncStatus({ state: 'synced', pendingCount: 0 });
-        setTimeout(() => setSyncStatus({ state: 'idle', pendingCount: 0 }), 2500);
-      } catch (err: any) {
-        setSyncStatus({ state: 'error', pendingCount: 1, message: err.message });
-      }
-    }
-  };
-
-  // 3. Save Prayer Log
-  const handleSavePrayerLog = async (logData: Omit<PrayerLogEntry, 'id' | 'timestamp'>) => {
-    const newEntry: PrayerLogEntry = {
-      ...logData,
-      id: `prayer_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    const updated = [newEntry, ...prayerLogs];
-    setPrayerLogs(updated);
-    StorageService.savePrayerLogs(updated);
-
-    if (accessToken && config.spreadsheetId) {
-      setSyncStatus({ state: 'syncing', pendingCount: 1 });
-      try {
-        await SheetsService.appendRow(accessToken, config.spreadsheetId, 'Prayer_Logs', [
-          newEntry.timestamp,
-          newEntry.date,
-          newEntry.prayerFocus,
-          newEntry.scriptureReference || '',
-          newEntry.meditationMinutes,
-          newEntry.isAnswered ? 'YES' : 'NO',
-          newEntry.answeredDate || '',
-          newEntry.answeredNote || '',
-          (newEntry.tags || []).join(', '),
-          JSON.stringify(newEntry.customValues || {}),
-        ]);
-        setSyncStatus({ state: 'syncing', pendingCount: 0 });
-        setTimeout(() => setSyncStatus({ state: 'idle', pendingCount: 0 }), 2500);
-      } catch (err: any) {
-        setSyncStatus({ state: 'error', pendingCount: 1, message: err.message });
-      }
-    }
-  };
-
-  // 4. Save Habit Checkoff
-  const handleSaveHabitLog = async (habitIds: string[], notes?: string) => {
-    const existingIndex = habitLogs.findIndex(h => h.date === todayStr);
-    const newEntry: HabitLogEntry = {
-      id: existingIndex >= 0 ? habitLogs[existingIndex].id : `habit_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      date: todayStr,
-      completedHabitIds: habitIds,
-      notes,
-    };
-
-    let updatedLogs: HabitLogEntry[];
-    if (existingIndex >= 0) {
-      updatedLogs = [...habitLogs];
-      updatedLogs[existingIndex] = newEntry;
-    } else {
-      updatedLogs = [newEntry, ...habitLogs];
-    }
-
-    setHabitLogs(updatedLogs);
-    StorageService.saveHabitLogs(updatedLogs);
-
-    if (accessToken && config.spreadsheetId) {
-      setSyncStatus({ state: 'syncing', pendingCount: 1 });
-      try {
-        await SheetsService.appendRow(accessToken, config.spreadsheetId, 'Habit_Logs', [
-          newEntry.timestamp,
-          newEntry.date,
-          habitIds.join(', '),
-          habitIds.length,
-          notes || '',
-        ]);
-        setSyncStatus({ state: 'synced', pendingCount: 0 });
-        setTimeout(() => setSyncStatus({ state: 'idle', pendingCount: 0 }), 2500);
-      } catch (err: any) {
-        setSyncStatus({ state: 'error', pendingCount: 1, message: err.message });
-      }
-    }
-  };
-
-  // 5. Sync Monthly Report
-  const handleSyncMonthlyReport = async (rep: any) => {
+  // Save a monthly report row
+  const handleSyncMonthlyReport = async (row: (string | number)[]) => {
     if (!accessToken || !config.spreadsheetId) {
       setIsSpreadsheetModalOpen(true);
-      return;
+      throw new Error('No spreadsheet connected');
     }
     setIsSyncingReport(true);
     try {
-      await SheetsService.appendMonthlyReport(accessToken, config.spreadsheetId, [
-        rep.month,
-        rep.avgMood,
-        rep.avgSleep,
-        rep.totalWater,
-        rep.workoutDays,
-        rep.totalPrayers,
-        rep.answeredPrayers,
-        rep.habitRate,
-        rep.insightsText,
-      ]);
+      await SheetsService.ensureTabsExist(accessToken, config.spreadsheetId, config.categories);
+      await SheetsService.appendMonthlyReport(accessToken, config.spreadsheetId, row);
     } finally {
       setIsSyncingReport(false);
     }
   };
 
   // Destructive Confirmation: Delete Custom Field
-  const requestDeleteField = (field: CustomField) => {
+  const requestDeleteField = (category: CategoryDef, field: CustomField) => {
     setConfirmModalState({
       isOpen: true,
-      title: `Delete Field "${field.label}"?`,
-      description: `Removing this field will exclude it from the mobile logger and future spreadsheet syncs. Existing columns already written to Google Sheets will remain intact.`,
+      title: `Delete field "${field.label}" from ${category.label}?`,
+      description: `It will disappear from the form and from the header row of the ${category.sheetName} tab the next time an entry is saved. Values already in the sheet are not deleted, but older rows keep their original column positions.`,
       actionText: 'Delete Field',
       onConfirm: () => {
-        const catKey = field.category === 'life' ? 'lifeFields' : field.category === 'health' ? 'healthFields' : field.category === 'prayer' ? 'prayerFields' : 'habitFields';
-        const updated = {
+        handleUpdateConfig({
           ...config,
-          [catKey]: config[catKey].filter(f => f.id !== field.id),
-        };
-        handleUpdateConfig(updated);
-        setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-      },
-    });
-  };
-
-  // Destructive Confirmation: Delete Habit
-  const requestDeleteHabit = (habit: HabitItem) => {
-    setConfirmModalState({
-      isOpen: true,
-      title: `Delete Habit "${habit.name}"?`,
-      description: `This habit and its current streak counter (${habit.streak} days) will be removed from your active daily tracking. Historical logs saved in Google Sheets will be preserved.`,
-      actionText: 'Delete Habit',
-      onConfirm: () => {
-        const updated = {
-          ...config,
-          habitsList: config.habitsList.filter(h => h.id !== habit.id),
-        };
-        handleUpdateConfig(updated);
+          categories: config.categories.map((c) =>
+            c.id === category.id ? { ...c, fields: c.fields.filter((f) => f.id !== field.id) } : c
+          ),
+        });
         setConfirmModalState(prev => ({ ...prev, isOpen: false }));
       },
     });
@@ -408,10 +244,10 @@ export default function App() {
             <div className="flex items-center justify-between px-1">
               <div>
                 <h1 className="text-base font-extrabold text-white tracking-wide">
-                  Desktop Schema Studio
+                  Category Studio
                 </h1>
                 <p className="text-xs text-stone-400">
-                  Customize mobile logging fields, habit engine rules, and Google Sheets database mapping.
+                  Customize the fields in each category and how they map to your Google Sheet.
                 </p>
               </div>
 
@@ -440,7 +276,6 @@ export default function App() {
                   onSaveToSheet={handleSaveSchemaToSheet}
                   isSavingToSheet={isSavingToSheet}
                   onRequestDeleteField={requestDeleteField}
-                  onRequestDeleteHabit={requestDeleteHabit}
                 />
               </div>
 
@@ -453,14 +288,8 @@ export default function App() {
                     <div className="w-full h-full rounded-[34px] overflow-hidden bg-white dark:bg-stone-950 flex flex-col">
                       <MobileView
                         config={config}
-                        onSaveLifeLog={handleSaveLifeLog}
-                        onSaveHealthLog={handleSaveHealthLog}
-                        onSavePrayerLog={handleSavePrayerLog}
-                        onSaveHabitLog={handleSaveHabitLog}
-                        habitsCheckedToday={habitsCheckedToday}
-                        todayLifeLog={todayLifeLog}
-                        todayHealthLog={todayHealthLog}
-                        todayPrayerLogs={todayPrayerLogs}
+                        entries={entries}
+                        onSaveEntry={handleSaveEntry}
                         isSyncing={syncStatus.state === 'syncing'}
                         isInDesktopFrame={true}
                       />
@@ -479,14 +308,8 @@ export default function App() {
           <div className="flex-1 flex justify-center py-1 sm:py-3">
             <MobileView
               config={config}
-              onSaveLifeLog={handleSaveLifeLog}
-              onSaveHealthLog={handleSaveHealthLog}
-              onSavePrayerLog={handleSavePrayerLog}
-              onSaveHabitLog={handleSaveHabitLog}
-              habitsCheckedToday={habitsCheckedToday}
-              todayLifeLog={todayLifeLog}
-              todayHealthLog={todayHealthLog}
-              todayPrayerLogs={todayPrayerLogs}
+              entries={entries}
+              onSaveEntry={handleSaveEntry}
               isSyncing={syncStatus.state === 'syncing'}
               isInDesktopFrame={false}
             />
@@ -498,10 +321,7 @@ export default function App() {
           <div className="flex-1">
             <MonthlyReportView
               config={config}
-              lifeLogs={lifeLogs}
-              healthLogs={healthLogs}
-              prayerLogs={prayerLogs}
-              habitLogs={habitLogs}
+              entries={entries}
               onSyncReportToSheet={handleSyncMonthlyReport}
               isSyncingReport={isSyncingReport}
             />
