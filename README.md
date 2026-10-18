@@ -4,6 +4,14 @@ SheetSync is a personal tracker that logs everyday life into your own Google She
 
 Live app: <https://sherol.github.io/sheetsync/>
 
+<p>
+  <img src="docs/screenshots/home.png" alt="Home screen listing every category" width="240">
+  <img src="docs/screenshots/food.png" alt="Medicine and Food form with green-to-red rating scales" width="240">
+  <img src="docs/screenshots/prayer.png" alt="Bible study progress map" width="240">
+</p>
+
+The screenshots use example data.
+
 ## Contents
 
 - [Getting started](#getting-started)
@@ -69,6 +77,11 @@ The app opens on a **home list** of every category, top to bottom. Each row show
 - **Edit:** tap the pencil on a recent entry to load it into the form, change it, then tap **Update entry**. In Google Sheets, an edit overwrites that entry's existing row instead of adding a new one, so you can keep records such as a person's "Last Contact" or a recipe's "Last Cooked" current.
 - **Recent entries:** shows up to 10 entries, newest first, with their choices, coloured ratings and clickable links.
 
+<p>
+  <img src="docs/screenshots/mood.png" alt="Mood form with the 1 to 10 scale" width="240">
+  <img src="docs/screenshots/people.png" alt="People form picking a project" width="240">
+</p>
+
 ## Field types
 
 | Type | What you see | Stored in the sheet as |
@@ -93,6 +106,8 @@ The Prayer category includes a Bible study tracker.
 
 The tracker appears on the Prayer screen and at the bottom of the monthly report.
 
+<img src="docs/screenshots/prayer.png" alt="Bible study progress with Psalms selected" width="300">
+
 ## Monthly report
 
 **Monthly Reports** covers the month you pick from the selector. The selector lists every month that has entries, plus the current month. All numbers come from what you logged; an empty month shows "—" rather than an estimate.
@@ -104,11 +119,15 @@ The tracker appears on the Prayer screen and at the bottom of the monthly report
 - **Details:** the average of every other rating field, such as Hunger, Burning and Stress, plus counts for choice fields (e.g. Media by type).
 - **Bible Study Progress:** all-time, at the bottom of the report.
 
+![Monthly report](docs/screenshots/report.png)
+
 **Save Report to Sheet** adds a row to the `Monthly_Reports` tab with the month, entry count, average mood, counts by category and the summary.
 
 ## Category Studio
 
 The studio is where you change what you track. A sidebar lists the categories; select one to edit it.
+
+![Category Studio editing the People tab](docs/screenshots/studio.png)
 
 ### Tab settings
 
@@ -120,6 +139,8 @@ The studio is where you change what you track. A sidebar lists the categories; s
   - Names already used by another tab aren't allowed.
 - **Colour:** pick one of 12 swatches, or any custom colour.
 - **Delete tab:** removes the category and its entries from this device, after you confirm. The tab in Google Sheets is not touched.
+
+![Icon library](docs/screenshots/icon-picker.png)
 
 **+ New tab** in the sidebar creates a category with Name, Date and Notes fields, ready to rename and extend.
 
