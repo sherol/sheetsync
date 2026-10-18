@@ -50,10 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Brand & Spreadsheet badge */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-md shadow-rose-500/25 shrink-0 transition-transform duration-200 hover:scale-105">
-            <SquirrelIcon
-              className="w-full h-full object-cover"
-              variant={currentView === 'schema-editor' ? 'mascot' : 'outline'}
-            />
+            <SquirrelIcon className="w-full h-full object-cover" variant="mascot" />
           </div>
           <div>
             <div className="flex items-center gap-2">
