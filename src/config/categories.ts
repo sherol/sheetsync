@@ -174,12 +174,12 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
 ];
 
 /**
- * Colour for a value on a rating scale, running from blue at the minimum
- * through cyan, green, yellow and orange to red at the maximum.
+ * Colour for a value on a rating scale, running from green at the minimum
+ * through yellow and orange to red at the maximum.
  */
 export function ratingColor(value: number, min = 1, max = 10, alpha = 1): string {
   const t = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
-  const hue = Math.round(220 - t * 220);
+  const hue = Math.round(120 - t * 120);
   return `hsl(${hue} 85% 55% / ${alpha})`;
 }
 

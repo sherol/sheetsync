@@ -116,7 +116,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
       const opts = field.options || [];
       return opts.length > 6 ? `${opts.length} choices` : opts.join(', ');
     }
-    if (field.type === 'rating') return `${field.min ?? 1} to ${field.max ?? 10}, blue to red`;
+    if (field.type === 'rating') return `${field.min ?? 1} to ${field.max ?? 10}, green to red`;
     if (field.type === 'relation') {
       const rel = config.categories.find((c) => c.id === field.relatedCategoryId);
       return rel ? `Picks from ${rel.label}` : 'Linked category missing';
@@ -275,7 +275,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                   {newType === 'rating' && (
                     <div className="grid grid-cols-2 gap-3 max-w-xs">
                       <div>
-                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Lowest (blue)</label>
+                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Lowest (green)</label>
                         <input
                           type="number"
                           value={newMin}
