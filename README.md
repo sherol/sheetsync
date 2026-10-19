@@ -33,7 +33,7 @@ The screenshots use example data.
 3. Select the spreadsheet status under the SheetSync name in the top bar to open the spreadsheet dialog, then do one of these:
    - **Create** a new spreadsheet. SheetSync adds one tab per category plus `Monthly_Reports` and `App_Config`.
    - **Pick** an existing spreadsheet from your Drive, or **paste** its URL or ID. SheetSync adds any missing tabs and leaves existing tabs alone.
-4. Start logging. Entries also save on the device, so the app works before you connect a sheet.
+4. Start logging. Entries also save on the device, so the app works before you connect a sheet; anything logged offline is sent once you connect.
 
 ## The three views
 
@@ -159,15 +159,24 @@ The studio is where you change what you track. A sidebar lists the categories; s
 
 **Home Screen Order** sets the order of the categories on the app's home list.
 
-**Save Layout to Sheet** writes your current setup as JSON to the `App_Config` tab as a backup.
+Your setup is backed up to the `App_Config` tab automatically a couple of seconds after each change, while you're connected. **Save Layout to Sheet** backs it up right away.
 
 ## How data is stored and synced
 
-- **On the device:** entries and settings are saved in the browser's local storage, so they persist between visits on that device and browser.
-- **In Google Sheets:** when connected and signed in, every save writes to the category's tab.
-  - Each row has **ID**, **Saved At**, then one column per field in the studio's order.
-  - The header row refreshes on each save, so new fields get a column.
+SheetSync keeps a copy on the device and syncs it with your Google Sheet both ways.
+
+- **On the device:** entries and settings are saved in the browser's local storage, so the app works offline and before you connect.
+- **Sending:** every save is sent to the category's tab when you're connected. Anything saved while offline or signed out is kept as **unsent**. The badge next to the sheet name shows how many entries haven't been sent yet. They're sent automatically when you connect, when the network comes back, or when you tap the badge.
+- **Loading:** when you connect, and when you come back to the app after a minute or more, SheetSync reads every tab and merges it into the device:
+  - Entries that are only in the sheet are added, so a new phone, a cleared browser, or rows added by another app (such as mdlife) show up.
+  - If an entry was changed in both places, the version with the newer **Saved At** wins.
+  - Your category setup is restored from the `App_Config` backup on a device that hasn't changed its own setup. Otherwise the newer setup wins.
+  - Nothing on the device is deleted by loading. An entry missing from the sheet is sent again.
+- **In the sheet:** each row has **ID**, **Saved At**, then one column per field in the studio's order.
   - Rows are matched by ID, so editing an entry updates its row.
+  - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.
+- **Staying connected:** Google sign-in lasts about an hour and survives reloading the page, until you close the tab. When it runs out, the header shows **Reconnect**. Your entries are kept and sent once you reconnect.
+- **Switching spreadsheets:** connecting a different spreadsheet sends every entry on the device to it.
 - **Changing fields later:** reordering or deleting fields changes the header row, but rows already in the sheet keep their original column positions.
 - **Older versions of SheetSync:** if you used the earlier Life / Health / Prayer / Habits version, your connected spreadsheet stays linked. Its old tabs are left untouched, and the new category tabs are added beside them.
 
@@ -179,6 +188,7 @@ Requirements: Node.js 20 or newer.
 npm install --legacy-peer-deps
 npm run dev      # dev server on http://localhost:3000
 npm run lint     # type check (tsc --noEmit)
+npm test         # unit tests (vitest)
 npm run build    # production build in dist/
 ```
 
@@ -188,9 +198,11 @@ npm run build    # production build in dist/
 |---|---|
 | `src/config/categories.ts` | The default categories, the rating colour scale, entry title/date helpers |
 | `src/config/bible.ts` | The 66 books with chapter counts, chapter parsing, progress maths |
-| `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, upsert rows, rename tabs, reports |
+| `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs, write rows, rename tabs, reports |
+| `src/services/syncEngine.ts`, `syncLogic.ts` | Two-way sync: reading tabs, merging by ID and Saved At, sending unsent entries and the layout backup |
+| `src/hooks/useSheetSync.ts` | When sync runs: on connect, after saves and layout edits, on return to the app, when back online |
 | `src/services/storageService.ts` | Local storage, and migration from older saved settings |
-| `src/services/auth.ts` | Google sign-in through Firebase Auth |
+| `src/services/auth.ts` | Google sign-in through Firebase Auth; the token is kept for the tab until it expires |
 | `src/components/MobileView.tsx` | Home list, entry form, recent entries |
 | `src/components/DesktopStudio.tsx`, `CategorySettings.tsx` | Category Studio |
 | `src/components/FieldInput.tsx` | One input component for every field type |

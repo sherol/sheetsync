@@ -9,7 +9,8 @@ import {
   LogOut, 
   CheckCircle2,
   RefreshCw,
-  Sparkles
+  CloudUpload,
+  AlertCircle,
 } from 'lucide-react';
 import { SquirrelIcon } from './SquirrelIcon';
 import { AppConfig, SyncStatus } from '../types';
@@ -26,8 +27,63 @@ interface NavbarProps {
   onLogoutClick: () => void;
   onOpenSpreadsheetModal: () => void;
   isLoggingIn: boolean;
-  onTriggerSync?: () => void;
+  /** Has a usable Google access token (signed in and not expired). */
+  isConnected: boolean;
+  onTriggerSync: () => void;
 }
+
+/** Sync state next to the sheet name; tap to sync now (or reconnect). */
+const SyncBadge: React.FC<{ syncStatus: SyncStatus; isConnected: boolean; onClick: () => void }> = ({
+  syncStatus,
+  isConnected,
+  onClick,
+}) => {
+  const { state, pendingCount, message } = syncStatus;
+  const unsent = `${pendingCount} unsent`;
+  if (state === 'syncing') {
+    return (
+      <span className="inline-flex items-center gap-1 ml-1 text-cyan-400" title="Syncing with Google Sheets">
+        <RefreshCw className="w-3 h-3 animate-spin" />
+      </span>
+    );
+  }
+  if (state === 'error' || pendingCount > 0 || !isConnected) {
+    const title =
+      state === 'error'
+        ? `${message || 'Sync failed'}. Tap to try again.`
+        : !isConnected
+        ? `Not connected${pendingCount ? `: ${unsent} entr${pendingCount === 1 ? 'y' : 'ies'} saved on this device only` : ''}. Tap to connect.`
+        : `${unsent}. Tap to send now.`;
+    return (
+      <button
+        onClick={onClick}
+        title={title}
+        className={`inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold whitespace-nowrap shrink-0 ${
+          state === 'error'
+            ? 'border-red-500/40 bg-red-500/10 text-red-300'
+            : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+        }`}
+      >
+        {state === 'error' ? <AlertCircle className="w-3 h-3" /> : <CloudUpload className="w-3 h-3" />}
+        {pendingCount > 0 ? (
+          <span>
+            {pendingCount}
+            <span className="hidden sm:inline"> unsent</span>
+          </span>
+        ) : state === 'error' ? (
+          'Retry'
+        ) : (
+          'Offline'
+        )}
+      </button>
+    );
+  }
+  return (
+    <button onClick={onClick} title="Synced. Tap to sync now." className="ml-1 text-emerald-400 hover:text-emerald-300">
+      <CheckCircle2 className="w-3 h-3" />
+    </button>
+  );
+};
 
 export const Navbar: React.FC<NavbarProps> = ({
   user,
@@ -39,6 +95,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogoutClick,
   onOpenSpreadsheetModal,
   isLoggingIn,
+  isConnected,
+  onTriggerSync,
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-stone-800 bg-[#0f1118]/95 backdrop-blur-md">
@@ -82,11 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <ExternalLink className="w-3 h-3 inline" />
                   </a>
-                  {syncStatus.state === 'syncing' ? (
-                    <RefreshCw className="w-3 h-3 animate-spin text-cyan-400 ml-1" />
-                  ) : (
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400 ml-1" />
-                  )}
+                  <SyncBadge syncStatus={syncStatus} isConnected={isConnected} onClick={onTriggerSync} />
                 </>
               ) : (
                 <button
@@ -184,6 +238,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-xs font-medium text-stone-200 hidden sm:inline max-w-[120px] truncate">
                   {user.displayName || user.email}
                 </span>
+                {!isConnected && (
+                  <button
+                    onClick={onLoginClick}
+                    disabled={isLoggingIn}
+                    className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-bold"
+                    title="Google sign-in expired. Tap to reconnect and sync."
+                  >
+                    {isLoggingIn ? 'Connecting...' : 'Reconnect'}
+                  </button>
+                )}
                 <button
                   onClick={onLogoutClick}
                   className="p-1 text-stone-400 hover:text-stone-200 rounded-full transition-colors ml-1"

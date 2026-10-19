@@ -3,17 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User } from 'firebase/auth';
-import { 
-  initAuth, 
-  googleSignIn, 
-  logout, 
-  setAccessTokenManually 
-} from './services/auth';
+import { initAuth, googleSignIn, logout } from './services/auth';
 import { StorageService } from './services/storageService';
 import { SheetsService } from './services/sheetsService';
-import { AppConfig, SyncStatus, Entry, CategoryDef, CustomField } from './types';
+import { AppConfig, Entry, CategoryDef, CustomField } from './types';
+import { useSheetSync } from './hooks/useSheetSync';
+import { isUnsent } from './services/syncLogic';
 import { Navbar, AppViewMode } from './components/Navbar';
 import { DesktopStudio } from './components/DesktopStudio';
 import { MobileView } from './components/MobileView';
@@ -38,18 +35,33 @@ export default function App() {
   // Optional side-by-side preview on desktop
   const [showDesktopMobilePreview, setShowDesktopMobilePreview] = useState(false);
 
-  // App Configuration
+  // App Configuration. Every change goes through updateConfig so the ref (read by the background
+  // sync) is always current and the device copy is saved.
   const [config, setConfig] = useState<AppConfig>(() => StorageService.getConfig());
+  const configRef = useRef(config);
+  const updateConfig = useCallback((fn: (c: AppConfig) => AppConfig) => {
+    const next = fn(configRef.current);
+    if (next === configRef.current) return;
+    configRef.current = next;
+    setConfig(next);
+    StorageService.saveConfig(next);
+  }, []);
 
-  // Logged entries for every category
+  // Logged entries for every category, updated the same way
   const [entries, setEntries] = useState<Entry[]>(() => StorageService.getEntries());
+  const entriesRef = useRef(entries);
+  const updateEntries = useCallback((fn: (e: Entry[]) => Entry[]) => {
+    const next = fn(entriesRef.current);
+    if (next === entriesRef.current) return;
+    entriesRef.current = next;
+    setEntries(next);
+    StorageService.saveEntries(next);
+  }, []);
 
-  // Sync state
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
-    state: 'idle',
-    pendingCount: 0,
-  });
-  const [isSavingToSheet, setIsSavingToSheet] = useState(false);
+  // Two-way sync with the Google Sheet
+  const { status: sync, sync: runSync } = useSheetSync({ accessToken, configRef, updateConfig, entriesRef, updateEntries });
+  const pendingCount = entries.filter((e) => isUnsent(e, config.spreadsheetId)).length;
+  const syncStatus = { ...sync, pendingCount };
   const [isSyncingReport, setIsSyncingReport] = useState(false);
 
   // Modals
@@ -81,7 +93,9 @@ export default function App() {
         () => {
           setUser(null);
           setAccessToken(null);
-        }
+        },
+        // Token expired: stay signed in to Firebase so the header offers a one-tap reconnect.
+        () => setAccessToken(null)
       );
       return () => unsubscribe();
     } catch (e) {
@@ -96,7 +110,6 @@ export default function App() {
       if (res) {
         setUser(res.user);
         setAccessToken(res.accessToken);
-        setAccessTokenManually(res.accessToken);
       }
     } catch (err) {
       console.error('Sign-in error:', err);
@@ -114,46 +127,49 @@ export default function App() {
     }
   };
 
-  // Update Config
+  // Update Config (from the studio and the spreadsheet dialog)
   const handleUpdateConfig = (newConfig: AppConfig) => {
-    setConfig(newConfig);
-    StorageService.saveConfig(newConfig);
+    updateConfig((prev) => {
+      const layoutChanged =
+        newConfig.categories !== prev.categories || newConfig.defaultCategoryId !== prev.defaultCategoryId;
+      // Sync bookkeeping always comes from the latest config, not the caller's copy.
+      const synced = { lastSyncedAt: prev.lastSyncedAt, layoutUpdatedAt: prev.layoutUpdatedAt, layoutSyncedTo: prev.layoutSyncedTo };
+      return layoutChanged
+        ? { ...newConfig, ...synced, layoutUpdatedAt: new Date().toISOString(), layoutSyncedTo: null }
+        : { ...newConfig, ...synced };
+    });
   };
 
-  // Connect / Select Spreadsheet
+  // Back up layout changes to the sheet a moment after the last edit.
+  useEffect(() => {
+    if (!config.layoutUpdatedAt || config.layoutSyncedTo === config.spreadsheetId) return;
+    const t = setTimeout(() => void runSync(false), 2000);
+    return () => clearTimeout(t);
+  }, [config.layoutUpdatedAt, config.layoutSyncedTo, config.spreadsheetId, runSync]);
+
+  // Connect / Select Spreadsheet (a full sync follows automatically)
   const handleUpdateSpreadsheet = (sheetId: string, sheetName: string) => {
-    const updated = {
-      ...config,
-      spreadsheetId: sheetId,
-      spreadsheetName: sheetName,
-      lastSyncedAt: new Date().toISOString(),
-    };
-    handleUpdateConfig(updated);
+    updateConfig((c) => ({ ...c, spreadsheetId: sheetId, spreadsheetName: sheetName }));
   };
 
-  // Save Schema Config to Google Sheet
+  // "Save Layout to Sheet": back up the layout now
   const handleSaveSchemaToSheet = async () => {
     if (!accessToken || !config.spreadsheetId) {
       setIsSpreadsheetModalOpen(true);
       return;
     }
-    setIsSavingToSheet(true);
-    try {
-      await SheetsService.saveAppConfigToSheet(
-        accessToken,
-        config.spreadsheetId,
-        JSON.stringify(config)
-      );
-      setSyncStatus({ state: 'synced', pendingCount: 0, message: 'Schema synced to Google Sheet!' });
-      setTimeout(() => setSyncStatus({ state: 'idle', pendingCount: 0 }), 3000);
-    } catch (err: any) {
-      setSyncStatus({ state: 'error', pendingCount: 0, message: err.message });
-    } finally {
-      setIsSavingToSheet(false);
-    }
+    updateConfig((c) => ({ ...c, layoutUpdatedAt: c.layoutUpdatedAt ?? new Date().toISOString(), layoutSyncedTo: null }));
+    await runSync(false);
   };
 
-  // Save (or update) an entry in any category
+  // Header sync button: sign in if needed, otherwise sync now
+  const handleTriggerSync = () => {
+    if (!accessToken) void handleLogin();
+    else if (!config.spreadsheetId) setIsSpreadsheetModalOpen(true);
+    else void runSync(true);
+  };
+
+  // Save (or update) an entry in any category; it's sent to the sheet when connected
   const handleSaveEntry = async (categoryId: string, values: Record<string, any>, existingId?: string) => {
     const category = config.categories.find((c) => c.id === categoryId);
     if (!category) return;
@@ -165,22 +181,8 @@ export default function App() {
       values,
     };
 
-    const updated = existingId
-      ? entries.map((e) => (e.id === existingId ? entry : e))
-      : [entry, ...entries];
-    setEntries(updated);
-    StorageService.saveEntries(updated);
-
-    if (accessToken && config.spreadsheetId) {
-      setSyncStatus({ state: 'syncing', pendingCount: 1 });
-      try {
-        await SheetsService.upsertEntry(accessToken, config.spreadsheetId, category, entry);
-        setSyncStatus({ state: 'synced', pendingCount: 0 });
-        setTimeout(() => setSyncStatus({ state: 'idle', pendingCount: 0 }), 2500);
-      } catch (err: any) {
-        setSyncStatus({ state: 'error', pendingCount: 1, message: err.message });
-      }
-    }
+    updateEntries((list) => (existingId ? list.map((e) => (e.id === existingId ? entry : e)) : [entry, ...list]));
+    void runSync(false);
   };
 
   // Save a monthly report row
@@ -226,9 +228,7 @@ export default function App() {
       description: `It will be removed from the app${count ? ` along with its ${count} saved entr${count === 1 ? 'y' : 'ies'} on this device` : ''}. The ${category.sheetName} tab in your Google Sheet is not touched, so anything already synced stays there.`,
       actionText: 'Delete Tab',
       onConfirm: () => {
-        const remainingEntries = entries.filter((e) => e.categoryId !== category.id);
-        setEntries(remainingEntries);
-        StorageService.saveEntries(remainingEntries);
+        updateEntries((list) => list.filter((e) => e.categoryId !== category.id));
         handleUpdateConfig({
           ...config,
           categories: config.categories.filter((c) => c.id !== category.id),
@@ -271,6 +271,8 @@ export default function App() {
         onLogoutClick={handleLogout}
         onOpenSpreadsheetModal={() => setIsSpreadsheetModalOpen(true)}
         isLoggingIn={isLoggingIn}
+        isConnected={!!accessToken}
+        onTriggerSync={handleTriggerSync}
       />
 
       {/* Main Content Area */}
@@ -314,7 +316,7 @@ export default function App() {
                   config={config}
                   onUpdateConfig={handleUpdateConfig}
                   onSaveToSheet={handleSaveSchemaToSheet}
-                  isSavingToSheet={isSavingToSheet}
+                  isSavingToSheet={sync.state === 'syncing'}
                   onRequestDeleteField={requestDeleteField}
                   onRequestDeleteCategory={requestDeleteCategory}
                   onRenameSheetTab={handleRenameSheetTab}

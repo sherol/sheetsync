@@ -48,6 +48,7 @@ export interface Entry {
   categoryId: string;
   timestamp: string; // ISO string, last saved
   values: Record<string, any>;
+  syncedTo?: string; // spreadsheet ID this version was written to; unset = not sent yet
 }
 
 export interface AppConfig {
@@ -59,6 +60,8 @@ export interface AppConfig {
   spreadsheetId: string | null;
   spreadsheetName: string | null;
   lastSyncedAt: string | null;
+  layoutUpdatedAt: string | null; // when categories or home order last changed on this device
+  layoutSyncedTo: string | null; // spreadsheet ID the current layout was backed up to
 }
 
 export interface SyncStatus {
