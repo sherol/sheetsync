@@ -12,6 +12,8 @@ export const INITIAL_CONFIG: AppConfig = {
   spreadsheetId: null,
   spreadsheetName: null,
   lastSyncedAt: null,
+  layoutUpdatedAt: null,
+  layoutSyncedTo: null,
 };
 
 const STORAGE_KEYS = {

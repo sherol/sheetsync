@@ -1,4 +1,14 @@
 import { CategoryDef, Entry } from '../types';
+import { LAYOUT_KEY, valueToCell } from './syncLogic';
+
+/** Thrown when Google rejects the access token (401), so the app can ask to reconnect. */
+export class SheetsAuthError extends Error {}
+
+async function failure(res: Response, prefix: string): Promise<Error> {
+  const text = await res.text();
+  if (res.status === 401) return new SheetsAuthError(`Google sign-in expired. Reconnect to sync. (${prefix})`);
+  return new Error(`${prefix}: ${text}`);
+}
 
 export interface SheetHeaderConfig {
   sheetName: string;
@@ -31,13 +41,9 @@ export function tabsForCategories(categories: CategoryDef[]): SheetHeaderConfig[
 
 export function entryToRow(category: CategoryDef, entry: Entry): (string | number)[] {
   return [
-    entry.id,
-    entry.timestamp,
-    ...category.fields.map((f) => {
-      const v = entry.values[f.id];
-      if (v === undefined || v === null) return '';
-      return typeof v === 'number' ? v : String(v);
-    }),
+    valueToCell(null, entry.id),
+    valueToCell(null, entry.timestamp),
+    ...category.fields.map((f) => valueToCell(f, entry.values[f.id])),
   ];
 }
 
@@ -53,8 +59,12 @@ function columnLetter(index: number): string {
   return s;
 }
 
+function quoteTab(sheetName: string): string {
+  return `'${sheetName.replace(/'/g, "''")}'`;
+}
+
 function rowRange(sheetName: string, row: number, width: number): string {
-  return `'${sheetName}'!A${row}:${columnLetter(width)}${row}`;
+  return `${quoteTab(sheetName)}!A${row}:${columnLetter(width)}${row}`;
 }
 
 export class SheetsService {
@@ -66,10 +76,7 @@ export class SheetsService {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to list spreadsheets: ${err}`);
-    }
+    if (!res.ok) throw await failure(res, `Failed to list spreadsheets`);
     const data = await res.json();
     return data.files || [];
   }
@@ -82,10 +89,7 @@ export class SheetsService {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to load spreadsheet details: ${err}`);
-    }
+    if (!res.ok) throw await failure(res, 'Failed to load spreadsheet details');
     return await res.json();
   }
 
@@ -105,10 +109,7 @@ export class SheetsService {
         })),
       }),
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Could not write header rows: ${err}`);
-    }
+    if (!res.ok) throw await failure(res, `Could not write header rows`);
   }
 
   /**
@@ -138,10 +139,7 @@ export class SheetsService {
       }),
     });
 
-    if (!createRes.ok) {
-      const err = await createRes.text();
-      throw new Error(`Could not create Google Spreadsheet: ${err}`);
-    }
+    if (!createRes.ok) throw await failure(createRes, `Could not create Google Spreadsheet`);
 
     const created = await createRes.json();
     const spreadsheetId = created.spreadsheetId;
@@ -177,10 +175,7 @@ export class SheetsService {
         })),
       }),
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Could not add tabs: ${err}`);
-    }
+    if (!res.ok) throw await failure(res, `Could not add tabs`);
 
     await this.writeHeaders(accessToken, spreadsheetId, missingTabs);
     return [...existingTitles, ...missingTabs.map((t) => t.sheetName)];
@@ -214,10 +209,7 @@ export class SheetsService {
         ],
       }),
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Could not rename tab: ${err}`);
-    }
+    if (!res.ok) throw await failure(res, `Could not rename tab`);
     return true;
   }
 
@@ -225,7 +217,7 @@ export class SheetsService {
    * Append a row to a sheet tab
    */
   static async appendRow(accessToken: string, spreadsheetId: string, sheetName: string, rowValues: any[]): Promise<any> {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${sheetName}'!A1`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`${quoteTab(sheetName)}!A1`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
     const res = await fetch(url, {
       method: 'POST',
@@ -236,64 +228,111 @@ export class SheetsService {
       body: JSON.stringify({ values: [rowValues] }),
     });
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Append failed on ${sheetName}: ${err}`);
-    }
+    if (!res.ok) throw await failure(res, `Append failed on ${sheetName}`);
     return await res.json();
   }
 
   /**
-   * Write an entry to its category tab: overwrite the row with the same ID if
-   * there is one, otherwise append a new row. The header row is refreshed so
-   * newly added fields get a column.
+   * Read whole tabs as displayed in the sheet, in one request. Missing tabs are skipped.
+   * Returns rows (header row first) keyed by tab name.
    */
-  static async upsertEntry(accessToken: string, spreadsheetId: string, category: CategoryDef, entry: Entry): Promise<void> {
+  static async readTabs(accessToken: string, spreadsheetId: string, tabNames: string[]): Promise<Record<string, string[][]>> {
+    const info = await this.getSpreadsheet(accessToken, spreadsheetId);
+    const existing = new Set<string>((info.sheets || []).map((s: any) => s.properties.title));
+    const wanted = tabNames.filter((t) => existing.has(t));
+    if (wanted.length === 0) return {};
+
+    const params = new URLSearchParams({ valueRenderOption: 'FORMATTED_VALUE', majorDimension: 'ROWS' });
+    wanted.forEach((t) => params.append('ranges', quoteTab(t)));
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw await failure(res, 'Could not read the spreadsheet');
+    const data = await res.json();
+    const out: Record<string, string[][]> = {};
+    (data.valueRanges || []).forEach((vr: any, i: number) => {
+      out[wanted[i]] = (vr.values || []).map((row: any[]) => row.map((c) => String(c ?? '')));
+    });
+    return out;
+  }
+
+  /**
+   * Write entries to their category tab: rows with the same ID are overwritten, the rest are
+   * appended. The header row is refreshed so newly added fields get a column.
+   */
+  static async pushEntries(accessToken: string, spreadsheetId: string, category: CategoryDef, entries: Entry[]): Promise<void> {
+    if (entries.length === 0) return;
     await this.ensureTabsExist(accessToken, spreadsheetId, [category]);
     const headers = categoryHeaders(category);
-    await this.writeHeaders(accessToken, spreadsheetId, [{ sheetName: category.sheetName, headers }]);
 
-    const idRange = encodeURIComponent(`'${category.sheetName}'!A:A`);
+    const idRange = encodeURIComponent(`${quoteTab(category.sheetName)}!A:A`);
     const idsRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${idRange}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!idsRes.ok) {
-      const err = await idsRes.text();
-      throw new Error(`Could not read ${category.sheetName}: ${err}`);
-    }
+    if (!idsRes.ok) throw await failure(idsRes, `Could not read ${category.sheetName}`);
     const ids: string[][] = (await idsRes.json()).values || [];
-    const rowIndex = ids.findIndex((r, i) => i > 0 && r[0] === entry.id);
-    const row = entryToRow(category, entry);
+    const rowOf = new Map<string, number>();
+    ids.forEach((r, i) => {
+      if (i > 0 && r[0]) rowOf.set(r[0], i + 1);
+    });
 
-    if (rowIndex < 0) {
-      await this.appendRow(accessToken, spreadsheetId, category.sheetName, row);
-      return;
+    const updates = [{ range: rowRange(category.sheetName, 1, headers.length), values: [headers] }];
+    const appends: (string | number)[][] = [];
+    for (const entry of entries) {
+      const row = entryToRow(category, entry);
+      const at = rowOf.get(entry.id);
+      if (at) updates.push({ range: rowRange(category.sheetName, at, row.length), values: [row as any] });
+      else appends.push(row);
     }
 
-    const range = encodeURIComponent(rowRange(category.sheetName, rowIndex + 1, row.length));
-    const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ values: [row] }),
-      }
-    );
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Update failed on ${category.sheetName}: ${err}`);
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updates }),
+    });
+    if (!res.ok) throw await failure(res, `Update failed on ${category.sheetName}`);
+
+    if (appends.length > 0) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`${quoteTab(category.sheetName)}!A1`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      const appendRes = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: appends }),
+      });
+      if (!appendRes.ok) throw await failure(appendRes, `Append failed on ${category.sheetName}`);
     }
   }
 
   /**
-   * Save app config schema to App_Config sheet
+   * Save the category layout as the single "schema_config" row of the App_Config tab
+   * (the newest such row if older versions appended several).
    */
-  static async saveAppConfigToSheet(accessToken: string, spreadsheetId: string, configJson: string): Promise<void> {
-    const now = new Date().toISOString();
-    await this.appendRow(accessToken, spreadsheetId, 'App_Config', ['schema_config', configJson, now]);
+  static async saveLayout(accessToken: string, spreadsheetId: string, configJson: string, updatedAt: string): Promise<void> {
+    await this.ensureTabsExist(accessToken, spreadsheetId, []);
+    const range = encodeURIComponent(`${quoteTab('App_Config')}!A:A`);
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw await failure(res, 'Could not read App_Config');
+    const keys: string[][] = (await res.json()).values || [];
+    let row = -1;
+    keys.forEach((r, i) => {
+      if (i > 0 && r[0] === LAYOUT_KEY) row = i + 1;
+    });
+    const values = [LAYOUT_KEY, `'${configJson}`, `'${updatedAt}`];
+    if (row < 0) {
+      await this.appendRow(accessToken, spreadsheetId, 'App_Config', values);
+      return;
+    }
+    const put = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(rowRange('App_Config', row, 3))}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [values] }),
+      }
+    );
+    if (!put.ok) throw await failure(put, 'Could not save the layout');
   }
 
   /**
