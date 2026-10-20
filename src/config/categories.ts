@@ -7,6 +7,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'media',
     label: 'Media',
+    title: 'Media & Books',
     sheetName: 'Media',
     icon: 'film',
     color: '#f43f5e',
@@ -22,7 +23,8 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'food',
-    label: 'Medicine & Food',
+    label: 'Medicine',
+    title: 'Medicine & Food',
     sheetName: 'Medicine_Food',
     icon: 'pill',
     color: '#fb923c',
@@ -43,6 +45,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'memories',
     label: 'Memories',
+    title: 'Memories & Milestones',
     sheetName: 'Memories',
     icon: 'camera',
     color: '#facc15',
@@ -59,6 +62,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'mood',
     label: 'Mood',
+    title: 'Mood & Feelings',
     sheetName: 'Mood',
     icon: 'smile',
     color: '#84cc16',
@@ -72,7 +76,8 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'recipes',
-    label: 'Meals & Recipes',
+    label: 'Meals',
+    title: 'Meals & Recipes',
     sheetName: 'Meals_Recipes',
     icon: 'chefHat',
     color: '#10b981',
@@ -90,6 +95,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'projects',
     label: 'Projects',
+    title: 'Projects & Initiatives',
     sheetName: 'Projects',
     icon: 'folder',
     color: '#06b6d4',
@@ -106,6 +112,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'people',
     label: 'People',
+    title: 'People & Friends',
     sheetName: 'People',
     icon: 'users',
     color: '#3b82f6',
@@ -120,7 +127,8 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'presentations',
-    label: 'Presentations & Writings',
+    label: 'Presentations',
+    title: 'Presentations & Writings',
     sheetName: 'Presentations_Writings',
     icon: 'presentation',
     color: '#8b5cf6',
@@ -138,7 +146,8 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'ideas',
-    label: 'Prototypes & Ideas',
+    label: 'Prototypes',
+    title: 'Prototypes & Ideas',
     sheetName: 'Prototypes_Ideas',
     icon: 'lightbulb',
     color: '#d946ef',
@@ -156,6 +165,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'prayer',
     label: 'Prayer',
+    title: 'Prayer & Theology',
     sheetName: 'Prayer',
     icon: 'handHeart',
     color: '#f472b6',
@@ -182,6 +192,9 @@ export function ratingColor(value: number, min = 1, max = 10, alpha = 1): string
   const hue = Math.round(120 - t * 120);
   return `hsl(${hue} 85% 55% / ${alpha})`;
 }
+
+/** Full title of a category, falling back to its short label. */
+export const categoryTitle = (c: { label: string; title?: string }) => (c.title || '').trim() || c.label;
 
 export function entryTitle(category: CategoryDef, entry: { values: Record<string, any> }): string {
   const raw = category.titleFieldId ? entry.values[category.titleFieldId] : undefined;

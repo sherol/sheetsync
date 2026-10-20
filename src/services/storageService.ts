@@ -1,7 +1,7 @@
 import { AppConfig, Entry } from '../types';
 import { DEFAULT_CATEGORIES } from '../config/categories';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const INITIAL_CONFIG: AppConfig = {
   schemaVersion: SCHEMA_VERSION,
@@ -14,6 +14,20 @@ export const INITIAL_CONFIG: AppConfig = {
   lastSyncedAt: null,
   layoutUpdatedAt: null,
   layoutSyncedTo: null,
+};
+
+// Built-in tab names before short labels and full titles were split (schema v2).
+const V2_LABELS: Record<string, string> = {
+  media: 'Media',
+  food: 'Medicine & Food',
+  memories: 'Memories',
+  mood: 'Mood',
+  recipes: 'Meals & Recipes',
+  projects: 'Projects',
+  people: 'People',
+  presentations: 'Presentations & Writings',
+  ideas: 'Prototypes & Ideas',
+  prayer: 'Prayer',
 };
 
 const STORAGE_KEYS = {
@@ -29,6 +43,16 @@ export class StorageService {
         const parsed = JSON.parse(saved);
         if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.categories)) {
           return { ...INITIAL_CONFIG, ...parsed };
+        }
+        if (parsed.schemaVersion === 2 && Array.isArray(parsed.categories)) {
+          // v2 -> v3: built-in tabs still using their original names get the new
+          // short label + full title. Renamed tabs, fields and sheet tabs are kept.
+          const categories = parsed.categories.map((c: any) => {
+            const def = DEFAULT_CATEGORIES.find((d) => d.id === c.id);
+            if (!def || c.title || c.label !== V2_LABELS[c.id]) return c;
+            return { ...c, label: def.label, title: def.title };
+          });
+          return { ...INITIAL_CONFIG, ...parsed, categories, schemaVersion: SCHEMA_VERSION };
         }
         // Config from the old life/health/prayer/habits layout: start from the new
         // categories but keep the connected spreadsheet and preferences.

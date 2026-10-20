@@ -49,20 +49,20 @@ The top bar always shows the brown squirrel next to the **SheetSync Rainbow Stud
 
 ## Categories
 
-SheetSync starts with ten categories. Each one is a tab in the app and a tab in your Google Sheet.
+SheetSync starts with ten categories. Each one is a tab in the app and a tab in your Google Sheet. Tabs have a short name (shown on tabs and in lists) and a full title (shown under the name on the home screen and as the form heading); both are editable in Category Studio.
 
-| Category | Sheet tab | Fields |
+| Tab · full title | Sheet tab | Fields |
 |---|---|---|
-| Media | `Media` | Title, Type (Book / Movie / TV / Game), Date Consumed, Review, Links |
-| Medicine & Food | `Medicine_Food` | Date, Time, Type (Med / Snack / Meal / Drink), Food / Drink / Activity, Amount, How do I feel?, Hunger Level 1–10, Burning Level 1–10, Stress 1–10 |
-| Memories | `Memories` | Date, Location, Who Was There, What Happened, Results |
-| Mood | `Mood` | Date, Mood Score 1–10, Daily Recap |
-| Meals & Recipes | `Meals_Recipes` | Name, Type, Ingredients, Directions, Last Cooked, Links |
-| Projects | `Projects` | Name, Type, Date, About, Links |
-| People | `People` | Name, Last Contact, To-dos, Associated Projects |
-| Presentations & Writings | `Presentations_Writings` | Title, About, Where, When, Who Was There, Slides, Links |
-| Prototypes & Ideas | `Prototypes_Ideas` | Name, Type, Date, Idea, Related Projects, Links |
-| Prayer | `Prayer` | Date, Prayer, Book Studied, Chapters, Study Notes, Answered (Waiting / Answered) |
+| **Media** · Media & Books | `Media` | Title, Type (Book / Movie / TV / Game), Date Consumed, Review, Links |
+| **Medicine** · Medicine & Food | `Medicine_Food` | Date, Time, Type (Med / Snack / Meal / Drink), Food / Drink / Activity, Amount, How do I feel?, Hunger Level 1–10, Burning Level 1–10, Stress 1–10 |
+| **Memories** · Memories & Milestones | `Memories` | Date, Location, Who Was There, What Happened, Results |
+| **Mood** · Mood & Feelings | `Mood` | Date, Mood Score 1–10, Daily Recap |
+| **Meals** · Meals & Recipes | `Meals_Recipes` | Name, Type, Ingredients, Directions, Last Cooked, Links |
+| **Projects** · Projects & Initiatives | `Projects` | Name, Type, Date, About, Links |
+| **People** · People & Friends | `People` | Name, Last Contact, To-dos, Associated Projects |
+| **Presentations** · Presentations & Writings | `Presentations_Writings` | Title, About, Where, When, Who Was There, Slides, Links |
+| **Prototypes** · Prototypes & Ideas | `Prototypes_Ideas` | Name, Type, Date, Idea, Related Projects, Links |
+| **Prayer** · Prayer & Theology | `Prayer` | Date, Prayer, Book Studied, Chapters, Study Notes, Answered (Waiting / Answered) |
 
 You can rename, recolour, reorder, add and delete categories and their fields in [Category Studio](#category-studio).
 
@@ -132,7 +132,8 @@ The studio is where you change what you track. A sidebar lists the categories; s
 ### Tab settings
 
 - **Icon:** tap the large icon square to open the icon library. It has about 100 icons in six groups (Media & Hobbies, Food & Drink, Health & Mood, Work & Ideas, People & Places, Faith & Life) and a search box.
-- **Tab name:** the name shown in the app. Changing it does **not** change the Google Sheet.
+- **Tab name:** the short name shown on tabs and in lists. Changing it does **not** change the Google Sheet.
+- **Full title:** the longer title shown under the tab name on the home screen and as the form heading.
 - **Google Sheet tab:** the spreadsheet tab this category writes to.
   - **Match name** fills in a sheet-safe version of the tab name; for example, "Books & Films" becomes `Books_and_Films`.
   - **Rename sheet tab** applies it. If you're signed in and the sheet has a tab with the old name, that tab is renamed in the spreadsheet and keeps all its rows. Otherwise the app switches to the new name and creates that tab on the next save.

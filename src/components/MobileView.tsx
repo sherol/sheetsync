@@ -5,7 +5,7 @@ import { SquirrelIcon } from './SquirrelIcon';
 import { CategoryIcon } from './CategoryIcon';
 import { FieldInput } from './FieldInput';
 import { BibleProgress } from './BibleProgress';
-import { entryDate, entryTitle, ratingColor, splitLinks } from '../config/categories';
+import { categoryTitle, entryDate, entryTitle, ratingColor, splitLinks } from '../config/categories';
 
 interface MobileViewProps {
   config: AppConfig;
@@ -118,6 +118,11 @@ export const MobileView: React.FC<MobileViewProps> = ({
               </span>
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-bold text-white truncate">{c.label}</span>
+                {categoryTitle(c) !== c.label && (
+                  <span className="block text-[11px] font-semibold truncate" style={{ color: c.color }}>
+                    {categoryTitle(c)}
+                  </span>
+                )}
                 <span className="block text-[11px] text-stone-400">
                   {count === 0 ? 'No entries yet' : `${count} entr${count === 1 ? 'y' : 'ies'} · last ${last}`}
                 </span>
@@ -204,7 +209,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
                 <CategoryIcon name={category.icon} className="w-4 h-4" color={category.color} />
-                {editingId ? `Edit ${category.label}` : `New ${category.label} entry`}
+                {editingId ? `Edit · ${categoryTitle(category)}` : categoryTitle(category)}
               </h2>
               {editingId && (
                 <button

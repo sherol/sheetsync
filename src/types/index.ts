@@ -33,7 +33,8 @@ export interface BibleTrackerDef {
 
 export interface CategoryDef {
   id: string;
-  label: string;
+  label: string; // short name used on tabs and in lists
+  title?: string; // full title, e.g. "Media & Books"
   sheetName: string; // Google Sheet tab name
   icon: CategoryIcon;
   color: string; // hex accent

@@ -106,6 +106,21 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({
           </div>
 
           <div>
+            <label htmlFor="category-title" className="block text-[11px] font-medium text-stone-300 mb-1">
+              Full title
+            </label>
+            <input
+              id="category-title"
+              type="text"
+              value={category.title ?? ''}
+              placeholder={category.label}
+              onChange={(e) => onChange({ ...category, title: e.target.value })}
+              className={inputClass}
+            />
+            <p className="text-[10px] text-stone-500 mt-1">Shown under the tab name on the home screen and as the form heading.</p>
+          </div>
+
+          <div>
             <label htmlFor="sheet-name" className="block text-[11px] font-medium text-stone-300 mb-1">
               Google Sheet tab
             </label>
