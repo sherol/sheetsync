@@ -7,7 +7,8 @@ import {
   Check, 
   RefreshCw, 
   AlertCircle,
-  FileText
+  FileText,
+  RotateCcw
 } from 'lucide-react';
 import { SheetsService } from '../services/sheetsService';
 import { AppConfig } from '../types';
@@ -19,6 +20,9 @@ interface SpreadsheetModalProps {
   onUpdateSpreadsheet: (sheetId: string, sheetName: string) => void;
   accessToken: string | null;
   onLoginClick: () => void;
+  /** Back up the connected sheet into Drive's backup/ folder and start a new one. Resolves with a summary. */
+  onResetSpreadsheet: (opts: { keepLayout: boolean; title: string }) => Promise<string>;
+  entryCount: number;
 }
 
 export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
@@ -28,8 +32,32 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
   onUpdateSpreadsheet,
   accessToken,
   onLoginClick,
+  onResetSpreadsheet,
+  entryCount,
 }) => {
-  const [activeTab, setActiveTab] = useState<'create' | 'drive' | 'manual'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'drive' | 'manual' | 'reset'>('create');
+  const [keepLayout, setKeepLayout] = useState(true);
+  const [resetTitle, setResetTitle] = useState('');
+  const [resetConfirmed, setResetConfirmed] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleReset = async () => {
+    if (!accessToken || !config.spreadsheetId || !resetConfirmed) return;
+    setIsResetting(true);
+    setStatusMessage(null);
+    try {
+      const text = await onResetSpreadsheet({
+        keepLayout,
+        title: resetTitle.trim() || config.spreadsheetName || 'SheetSync - Personal Tracker',
+      });
+      setStatusMessage({ type: 'success', text });
+      setResetConfirmed(false);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err?.message || 'Reset failed. Nothing was changed.' });
+    } finally {
+      setIsResetting(false);
+    }
+  };
   const [newTitle, setNewTitle] = useState('SheetSync - Personal Tracker');
   const [manualInput, setManualInput] = useState('');
   const [driveSheets, setDriveSheets] = useState<Array<{ id: string; name: string; modifiedTime: string }>>([]);
@@ -242,10 +270,99 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
           >
             Enter ID / URL
           </button>
+          {config.spreadsheetId && (
+            <button
+              onClick={() => setActiveTab('reset')}
+              className={`pb-2.5 px-3.5 border-b-2 transition-all ${
+                activeTab === 'reset'
+                  ? 'border-rose-500 text-rose-300 font-extrabold'
+                  : 'border-transparent text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              Reset Sheet
+            </button>
+          )}
         </div>
 
         {/* Content per Tab */}
         <div className="mt-4 flex-1 overflow-y-auto">
+          {activeTab === 'reset' && config.spreadsheetId && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[#171926] border border-stone-800 text-xs text-stone-300 space-y-2">
+                <span className="font-bold text-white block">Reset starts a fresh spreadsheet:</span>
+                <ol className="list-decimal pl-4 space-y-1">
+                  <li>
+                    A copy of <span className="font-semibold text-white">{config.spreadsheetName || 'the current sheet'}</span> is
+                    saved to the <span className="font-mono text-white">backup</span> folder in your Google Drive. The original
+                    stays where it is.
+                  </li>
+                  <li>A new, empty spreadsheet is created and connected.</li>
+                  <li>
+                    This device's list of {entryCount} entr{entryCount === 1 ? 'y' : 'ies'} is cleared, so nothing old is sent to the
+                    new sheet. Everything is still in the backup.
+                  </li>
+                </ol>
+              </div>
+
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-medium text-stone-300 mb-1">Tabs and fields for the new sheet</legend>
+                {[
+                  { value: true, title: 'Keep the current schema', body: 'Same tabs, names, icons and fields you have now.' },
+                  { value: false, title: 'Start with a new schema', body: 'The default ten tabs and fields. You can customise them afterwards.' },
+                ].map((o) => (
+                  <label
+                    key={String(o.value)}
+                    className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                      keepLayout === o.value ? 'border-rose-500/50 bg-rose-950/20' : 'border-stone-800 bg-stone-900/60 hover:border-stone-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="reset-schema"
+                      checked={keepLayout === o.value}
+                      onChange={() => setKeepLayout(o.value)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-xs font-bold text-white">{o.title}</span>
+                      <span className="block text-[11px] text-stone-400">{o.body}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+
+              <div>
+                <label htmlFor="reset-title" className="block text-xs font-medium text-stone-300 mb-1">
+                  New spreadsheet title
+                </label>
+                <input
+                  id="reset-title"
+                  type="text"
+                  value={resetTitle}
+                  placeholder={config.spreadsheetName || 'SheetSync - Personal Tracker'}
+                  onChange={(e) => setResetTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                <input type="checkbox" checked={resetConfirmed} onChange={(e) => setResetConfirmed(e.target.checked)} />
+                <span>I understand this device starts with an empty entry list.</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={!accessToken || !resetConfirmed || isResetting}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:opacity-95 disabled:opacity-40 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+              >
+                {isResetting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                <span>{isResetting ? 'Backing up and resetting…' : 'Back up and reset'}</span>
+              </button>
+              {!accessToken && <p className="text-[11px] text-amber-400">Sign in with Google first.</p>}
+            </div>
+          )}
+
           {activeTab === 'create' && (
             <div className="space-y-4">
               <div>

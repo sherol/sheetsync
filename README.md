@@ -162,6 +162,22 @@ The studio is where you change what you track. A sidebar lists the categories; s
 
 Your setup is backed up to the `App_Config` tab automatically a couple of seconds after each change, while you're connected. **Save Layout to Sheet** backs it up right away.
 
+## Resetting the sheet
+
+To start over with an empty spreadsheet, tap the spreadsheet name in the top bar and open **Reset Sheet**:
+
+1. Choose the tabs and fields for the new sheet:
+   - **Keep the current schema:** the same tabs, names, icons and fields you have now.
+   - **Start with a new schema:** the default ten tabs, ready to customise.
+2. Optionally give the new spreadsheet a title, tick the confirmation, and tap **Back up and reset**.
+
+SheetSync then:
+- copies the current spreadsheet into a folder named `backup` in your Google Drive, as "_name_ (backup _date time_)". The original spreadsheet is left where it is.
+- creates the new spreadsheet with the chosen tabs, connects it, and saves the layout to its `App_Config` tab.
+- clears this device's entry list, so old entries aren't sent to the new sheet. They're all in the backup.
+
+On your other devices, connect the new spreadsheet with **Choose from Drive**. If the backup step fails, nothing is changed.
+
 ## How data is stored and synced
 
 SheetSync keeps a copy on the device, sends every entry to your Google Sheet, and shares the category setup between devices through the sheet.

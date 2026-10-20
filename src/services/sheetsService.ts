@@ -113,6 +113,54 @@ export class SheetsService {
   }
 
   /**
+   * Find the Drive folder SheetSync keeps backups in ("backup" in My Drive), creating it if needed.
+   * With the drive.file permission this only sees folders SheetSync created itself.
+   */
+  static async findOrCreateBackupFolder(accessToken: string, name = 'backup'): Promise<string> {
+    const q = encodeURIComponent(
+      `name='${name}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`
+    );
+    const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!listRes.ok) throw await failure(listRes, 'Could not look for the backup folder');
+    const found = (await listRes.json()).files?.[0]?.id;
+    if (found) return found;
+
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder' }),
+    });
+    if (!createRes.ok) throw await failure(createRes, 'Could not create the backup folder');
+    return (await createRes.json()).id;
+  }
+
+  /**
+   * Copy a spreadsheet into the backup folder. The original is left where it is.
+   */
+  static async backupSpreadsheet(
+    accessToken: string,
+    spreadsheetId: string,
+    copyName: string
+  ): Promise<{ id: string; name: string; folderId: string }> {
+    const folderId = await this.findOrCreateBackupFolder(accessToken);
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${spreadsheetId}/copy?fields=id,name`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: copyName, parents: [folderId] }),
+    });
+    if (res.status === 404) {
+      throw new Error(
+        'SheetSync is not allowed to copy this spreadsheet. Reconnect it with "Choose from Drive" (or make a copy in Google Drive yourself), then try again.'
+      );
+    }
+    if (!res.ok) throw await failure(res, 'Could not back up the spreadsheet');
+    const copy = await res.json();
+    return { id: copy.id, name: copy.name, folderId };
+  }
+
+  /**
    * Create a new SheetSync spreadsheet with one tab per category
    */
   static async createMasterSpreadsheet(

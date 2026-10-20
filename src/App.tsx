@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { initAuth, googleSignIn, logout } from './services/auth';
-import { StorageService } from './services/storageService';
+import { StorageService, INITIAL_CONFIG } from './services/storageService';
+import { DEFAULT_CATEGORIES } from './config/categories';
 import { SheetsService } from './services/sheetsService';
 import { AppConfig, Entry, CategoryDef, CustomField } from './types';
 import { useSheetSync } from './hooks/useSheetSync';
@@ -150,6 +151,35 @@ export default function App() {
   // Connect / Select Spreadsheet (a full sync follows automatically)
   const handleUpdateSpreadsheet = (sheetId: string, sheetName: string) => {
     updateConfig((c) => ({ ...c, spreadsheetId: sheetId, spreadsheetName: sheetName }));
+  };
+
+  // Reset: copy the connected sheet into Drive's backup/ folder, then start and connect a new one
+  const handleResetSpreadsheet = async ({ keepLayout, title }: { keepLayout: boolean; title: string }): Promise<string> => {
+    const token = accessToken;
+    const old = configRef.current;
+    if (!token || !old.spreadsheetId) throw new Error('Sign in and connect a spreadsheet first.');
+
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const backup = await SheetsService.backupSpreadsheet(
+      token,
+      old.spreadsheetId,
+      `${old.spreadsheetName || 'SheetSync'} (backup ${stamp})`
+    );
+    const categories = keepLayout ? old.categories : DEFAULT_CATEGORIES;
+    const created = await SheetsService.createMasterSpreadsheet(token, categories, title);
+
+    updateEntries(() => []);
+    updateConfig((c) => ({
+      ...c,
+      ...(keepLayout ? {} : { categories: DEFAULT_CATEGORIES, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId }),
+      spreadsheetId: created.id,
+      spreadsheetName: created.name,
+      // Back the chosen layout up to the new sheet's App_Config on the next sync.
+      layoutUpdatedAt: new Date().toISOString(),
+      layoutSyncedTo: null,
+      lastSyncedAt: null,
+    }));
+    return `Backed up to "backup/${backup.name}" in Google Drive and connected the new spreadsheet "${created.name}". On your other devices, connect "${created.name}" with "Choose from Drive".`;
   };
 
   // "Save Layout to Sheet": back up the layout now
@@ -380,6 +410,8 @@ export default function App() {
         onClose={() => setIsSpreadsheetModalOpen(false)}
         config={config}
         onUpdateSpreadsheet={handleUpdateSpreadsheet}
+        onResetSpreadsheet={handleResetSpreadsheet}
+        entryCount={entries.length}
         accessToken={accessToken}
         onLoginClick={handleLogin}
       />
