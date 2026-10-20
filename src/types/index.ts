@@ -22,6 +22,7 @@ export interface CustomField {
   relatedCategoryId?: string; // for relation: pick entries from this category by their title field
   listId?: string; // for list: the shared list (AppConfig.lists) to pick from
   multiple?: boolean; // for list: allow several picks, stored comma-separated
+  allowNew?: boolean; // for list: offer "New …" to type an item that isn't in the list yet (it's added)
   required?: boolean;
   showInQuickLog?: boolean;
 }
@@ -70,8 +71,10 @@ export interface ListDef {
   id: string;
   label: string;
   items: string[];
-  /** Entries saved in this category add their title to the list. */
+  /** Entries saved in this category add their value to the list... */
   fromCategoryId?: string;
+  /** ...from this field (default: the category's title field). */
+  fromFieldId?: string;
 }
 
 export interface AppConfig {

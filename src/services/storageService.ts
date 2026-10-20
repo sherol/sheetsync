@@ -1,7 +1,7 @@
 import { AppConfig, Entry } from '../types';
-import { DEFAULT_CATEGORIES, DEFAULT_LISTS } from '../config/categories';
+import { DEFAULT_CATEGORIES, DEFAULT_LISTS, withDefaultLists } from '../config/categories';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const INITIAL_CONFIG: AppConfig = {
   schemaVersion: SCHEMA_VERSION,
@@ -53,6 +53,8 @@ const STORAGE_KEYS = {
  *   Projects' default title becomes "Projects & Practice" (only where still the old defaults).
  * - v5 -> v6: People's and Prototypes' project pickers become dropdowns from the shared Projects list;
  *   Medicine & Food gets quick-pick buttons.
+ * - v6 -> v7: Projects' Name and Type become dropdowns (Projects list, Project types list) that
+ *   also take new items, when they're still plain text fields.
  * Renamed tabs and fields are kept.
  */
 export function upgradeCategories(categories: any[], fromVersion: number): any[] {
@@ -66,6 +68,17 @@ export function upgradeCategories(categories: any[], fromVersion: number): any[]
     }
     if (fromVersion <= 3 && V3_SHEET_NAMES[c.id] && c.sheetName === V3_SHEET_NAMES[c.id]) {
       next = { ...next, sheetName: def.sheetName, renameFrom: next.renameFrom ?? c.sheetName };
+    }
+    if (fromVersion <= 6 && c.id === 'projects') {
+      next = {
+        ...next,
+        fields: (next.fields || []).map((f: any) => {
+          if (f.type !== 'text') return f;
+          if (f.id === 'name') return { ...f, type: 'list', listId: 'projects', allowNew: true };
+          if (f.id === 'type') return { ...f, type: 'list', listId: 'projectTypes', allowNew: true };
+          return f;
+        }),
+      };
     }
     if (fromVersion <= 5 && c.id === 'food' && next.quickPicksEnabled === undefined) {
       next = { ...next, quickPicksEnabled: true, quickPicks: next.quickPicks ?? [] };
@@ -107,9 +120,9 @@ export class StorageService {
         if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.categories)) {
           return { ...INITIAL_CONFIG, ...parsed };
         }
-        if ([2, 3, 4, 5].includes(parsed.schemaVersion) && Array.isArray(parsed.categories)) {
+        if ([2, 3, 4, 5, 6].includes(parsed.schemaVersion) && Array.isArray(parsed.categories)) {
           const categories = upgradeCategories(parsed.categories, parsed.schemaVersion);
-          return { ...INITIAL_CONFIG, ...parsed, categories, schemaVersion: SCHEMA_VERSION };
+          return { ...INITIAL_CONFIG, ...parsed, categories, lists: withDefaultLists(parsed.lists), schemaVersion: SCHEMA_VERSION };
         }
         // Config from the old life/health/prayer/habits layout: start from the new
         // categories but keep the connected spreadsheet and preferences.

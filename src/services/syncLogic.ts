@@ -1,5 +1,6 @@
 import { AppConfig, CategoryDef, CustomField, Entry } from '../types';
 import { upgradeCategories } from './storageService';
+import { withDefaultLists } from '../config/categories';
 
 /**
  * Pure helpers for two-way sync between this device and the Google Sheet.
@@ -184,7 +185,7 @@ export function parseLayoutBackup(rows: string[][], schemaVersion: number): Layo
       const parsed = JSON.parse(row[1]);
       // Backups from older schemas (v2, v3) are upgraded.
       const version = parsed?.schemaVersion;
-      if (![2, 3, 4, 5, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
+      if (![2, 3, 4, 5, 6, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
       const updatedAt = row[2] ?? '';
       if (best && timeOf(updatedAt) <= timeOf(best.updatedAt)) continue;
       best = {
@@ -193,7 +194,7 @@ export function parseLayoutBackup(rows: string[][], schemaVersion: number): Layo
           defaultCategoryId: parsed.defaultCategoryId,
           ...(typeof parsed.appName === 'string' ? { appName: parsed.appName } : {}),
           ...(typeof parsed.enableHaptics === 'boolean' ? { enableHaptics: parsed.enableHaptics } : {}),
-          ...(Array.isArray(parsed.lists) ? { lists: parsed.lists } : {}),
+          ...(Array.isArray(parsed.lists) ? { lists: withDefaultLists(parsed.lists) } : {}),
         },
         updatedAt,
       };

@@ -53,6 +53,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   const [newListId, setNewListId] = useState('');
   const [newListName, setNewListName] = useState('');
   const [newMultiple, setNewMultiple] = useState(true);
+  const [newAllowNew, setNewAllowNew] = useState(true);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
   const category =
@@ -126,6 +127,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     setNewListId('');
     setNewListName('');
     setNewMultiple(true);
+    setNewAllowNew(true);
     setIsAddingField(false);
     setEditingFieldId(null);
   };
@@ -151,7 +153,8 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     setNewQuickLog(field.showInQuickLog !== false);
     setNewListId(field.listId ?? '');
     setNewListName('');
-    setNewMultiple(field.multiple !== false);
+    setNewMultiple(!!field.multiple);
+    setNewAllowNew(!!field.allowNew);
   };
 
   // Add a field, or save changes to the one being edited. An edited field keeps its ID, so values
@@ -194,6 +197,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
         field.listId = newListId;
       }
       field.multiple = newMultiple;
+      field.allowNew = newAllowNew;
     }
 
     const fields = editingOriginal
@@ -220,7 +224,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     if (field.type === 'list') {
       const list = config.lists.find((l) => l.id === field.listId);
       if (!list) return 'List missing';
-      return `${list.label} (${list.items.length} item${list.items.length === 1 ? '' : 's'})${field.multiple ? ', several allowed' : ''}`;
+      return `${list.label} (${list.items.length} item${list.items.length === 1 ? '' : 's'})${field.multiple ? ', several allowed' : ''}${field.allowNew ? ', new allowed' : ''}`;
     }
     if (field.unit) return `Unit: ${field.unit}`;
     return '';
@@ -360,6 +364,10 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                       <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer sm:col-span-2">
                         <input type="checkbox" checked={newMultiple} onChange={(e) => setNewMultiple(e.target.checked)} />
                         <span>Allow several picks</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer sm:col-span-2">
+                        <input type="checkbox" checked={newAllowNew} onChange={(e) => setNewAllowNew(e.target.checked)} />
+                        <span>Offer “＋ New…” to add an item that isn't in the list</span>
                       </label>
                       <p className="text-[11px] text-stone-500 sm:col-span-2">
                         The list's items are edited from the form in the app (“Edit list”) and shared by every field that uses it.

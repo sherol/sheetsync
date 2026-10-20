@@ -59,7 +59,7 @@ SheetSync starts with ten categories. Each one is a tab in the app and a tab in 
 | **Memories** · Memories & Milestones | `Memories` | Date, Location, Who Was There, What Happened, Results |
 | **Mood** · Mood & Feelings | `Mood` | Date, Mood Score 1–10, Daily Recap |
 | **Meals** · Meals & Recipes | `Meals` | Name, Type, Ingredients, Directions, Last Cooked, Links |
-| **Projects** · Projects & Practice | `Projects` | Name, Type, Date, About, Links |
+| **Projects** · Projects & Practice | `Projects` | Name (from the Projects list), Type (from the Project types list), Date, About, Links |
 | **People** · People & Friends | `People` | Name, Last Contact, To-dos, Associated Projects (from the Projects list) |
 | **Presentations** · Presentations & Writings | `Presentations` | Title, About, Where, When, Who Was There, Slides, Links |
 | **Prototypes** · Prototypes & Ideas | `Prototypes` | Name, Type, Date, Idea, Related Projects (from the Projects list), Links |
@@ -89,7 +89,11 @@ Quick picks are saved with your tab setup, so every device has the same ones. Tu
 
 ### Projects list
 
-People's **Associated Projects** and Prototypes' **Related Projects** are dropdowns from one shared **Projects** list:
+On the **Projects & Practice** tab:
+- **Name** is a dropdown of your projects, so you can log another session on an existing one. Choose **＋ New project…** to type a new one; it joins the list.
+- **Type** is a dropdown from a **Project types** list (Practice, App, Music, Writing, Side project to start). **＋ New project type…** adds one, and **Edit project types** manages the list. Types you'd already used are added automatically.
+
+People's **Associated Projects** and Prototypes' **Related Projects** are dropdowns from the same shared **Projects** list:
 - Pick a project to add it as a chip; tap ✕ on a chip to remove it.
 - **Edit projects** opens the list right in the form: add, rename (tap a name), reorder or remove. Removing a project from the list doesn't change entries that already use it.
 - Saving an entry in the Projects tab adds its name to the list. Projects already logged on a device are added the first time it opens this version.
@@ -112,7 +116,7 @@ People's **Associated Projects** and Prototypes' **Related Projects** are dropdo
 | Date | A date picker | `YYYY-MM-DD` |
 | Time | A time picker | `HH:MM` |
 | Links | One link per line; shown as clickable links in recent entries | Text |
-| Dropdown from a shared list | A dropdown of a list's items (e.g. Projects), with **Edit list** to change the list; optionally several picks shown as chips | Text (comma-separated when several) |
+| Dropdown from a shared list | A dropdown of a list's items (e.g. Projects), with **Edit list** to change the list. Optionally several picks shown as chips, and **＋ New…** to add an item while logging | Text (comma-separated when several) |
 | Link to another category | Tap-to-pick buttons of entries in another category, plus a text box for anything else | Comma-separated names |
 
 ## Bible study tracker
@@ -167,7 +171,7 @@ The studio is where you change what you track. A sidebar lists the categories; s
   - Choice: its options.
   - Number: a unit.
   - Rating scale: lowest and highest values.
-  - Dropdown from a shared list: which list (or a new one), and whether several picks are allowed.
+  - Dropdown from a shared list: which list (or a new one), whether several picks are allowed, and whether **＋ New…** is offered.
   - Link to another category: which category to pick from.
 - **Edit** (pencil icon) opens a field in the same form, so you can change its name, type, choices, unit, scale, linked category, Required and Main form. The field keeps its identity, so entries already logged stay with it, and its sheet column header updates on the next save. The Prayer tab's Book Studied and Chapters fields keep their types because the Bible tracker reads them.
 - **↑ / ↓** reorder fields, which is also their column order in the sheet.

@@ -24,6 +24,8 @@ export const ListPicker: React.FC<ListPickerProps> = ({ field, list, value, onCh
   const [editing, setEditing] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [renaming, setRenaming] = useState<{ index: number; text: string } | null>(null);
+  const [typingNew, setTypingNew] = useState(false);
+  const [typedNew, setTypedNew] = useState('');
 
   const items = list?.items ?? [];
   const chosen = field.multiple ? splitList(value) : value ? [String(value)] : [];
@@ -70,6 +72,19 @@ export const ListPicker: React.FC<ListPickerProps> = ({ field, list, value, onCh
   const removeItem = (index: number) => save(items.filter((_, i) => i !== index));
 
   const available = items.filter((i) => !chosen.includes(i));
+  const singular = listName.toLowerCase().replace(/s$/, '');
+  // A single value that isn't in the list (e.g. an older entry) still shows as selected.
+  const singleOptions = !field.multiple && chosen[0] && !items.includes(chosen[0]) ? [chosen[0], ...items] : items;
+
+  const confirmNew = () => {
+    const text = typedNew.trim();
+    setTypingNew(false);
+    setTypedNew('');
+    if (!text) return;
+    const existing = items.find((i) => i.toLowerCase() === text.toLowerCase());
+    if (!existing) save([...items, text]);
+    choose(existing ?? text);
+  };
 
   return (
     <div>
@@ -114,22 +129,60 @@ export const ListPicker: React.FC<ListPickerProps> = ({ field, list, value, onCh
         <select
           id={`field-${field.id}`}
           value={field.multiple ? '' : chosen[0] ?? ''}
-          onChange={(e) => (e.target.value ? choose(e.target.value) : !field.multiple && onChange(''))}
+          onChange={(e) => {
+            if (e.target.value === '__new') setTypingNew(true);
+            else if (e.target.value) choose(e.target.value);
+            else if (!field.multiple) onChange('');
+          }}
           className={inputClass}
         >
           <option value="">
             {items.length === 0
-              ? `No ${listName.toLowerCase()} yet. Tap “Edit ${listName.toLowerCase()}” to add some`
+              ? field.allowNew
+                ? `Choose “＋ New ${singular}…” to add one`
+                : `No ${listName.toLowerCase()} yet. Tap “Edit ${listName.toLowerCase()}” to add some`
               : field.multiple
                 ? `Add from ${listName.toLowerCase()}…`
                 : '—'}
           </option>
-          {(field.multiple ? available : items).map((item) => (
+          {(field.multiple ? available : singleOptions).map((item) => (
             <option key={item} value={item}>
               {item}
             </option>
           ))}
+          {field.allowNew && <option value="__new">＋ New {singular}…</option>}
         </select>
+      )}
+
+      {typingNew && (
+        <div className="mt-2 flex gap-2">
+          <input
+            autoFocus
+            value={typedNew}
+            onChange={(e) => setTypedNew(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmNew();
+              }
+              if (e.key === 'Escape') setTypingNew(false);
+            }}
+            placeholder={`New ${singular}`}
+            className={inputClass}
+            aria-label={`New ${singular}`}
+          />
+          <button
+            type="button"
+            onClick={confirmNew}
+            className="shrink-0 px-3 rounded-xl text-xs font-bold text-white"
+            style={{ backgroundColor: accent }}
+          >
+            Add
+          </button>
+          <button type="button" onClick={() => setTypingNew(false)} className="shrink-0 px-2 text-xs text-stone-400 hover:text-stone-200">
+            Cancel
+          </button>
+        </div>
       )}
 
       {editing && list && (

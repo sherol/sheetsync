@@ -61,7 +61,7 @@ export function buildMonthlyReport(categories: CategoryDef[], entries: Entry[], 
         const avg = average(nums);
         if (avg !== null) ratingAverages.push({ category: c, label: f.label, avg, min: f.min ?? 1, max: f.max ?? 10, n: nums.length });
       }
-      if (f.type === 'select' && (f.options || []).length <= 12) {
+      if ((f.type === 'select' && (f.options || []).length <= 12) || (f.type === 'list' && !f.multiple && f.id !== c.titleFieldId)) {
         const tally = new Map<string, number>();
         for (const e of rows) {
           const v = String(e.values[f.id] ?? '').trim();

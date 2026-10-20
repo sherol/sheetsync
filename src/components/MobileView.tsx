@@ -314,7 +314,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
                   <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-stone-400">
                     <span className="font-mono">{entryDate(category, entry)}</span>
                     {category.fields
-                      .filter((f) => f.type === 'select' && entry.values[f.id])
+                      .filter((f) => (f.type === 'select' || (f.type === 'list' && !f.multiple && f.id !== category.titleFieldId)) && entry.values[f.id])
                       .map((f) => (
                         <span key={f.id} className="px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-300">
                           {entry.values[f.id]}

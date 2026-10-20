@@ -288,16 +288,14 @@ export default function App() {
     };
 
     updateEntries((list) => (existingId ? list.map((e) => (e.id === existingId ? entry : e)) : [entry, ...list]));
-    // Saving a project (or anything a shared list follows) adds its title to that list.
-    const title = String((category.titleFieldId && values[category.titleFieldId]) ?? '').trim();
-    if (title) {
-      const lists = configRef.current.lists.map((l) =>
-        l.fromCategoryId === categoryId && !l.items.some((i) => i.toLowerCase() === title.toLowerCase())
-          ? { ...l, items: [...l.items, title] }
-          : l
-      );
-      if (lists.some((l, i) => l !== configRef.current.lists[i])) handleUpdateConfig({ ...configRef.current, lists });
-    }
+    // Saving a project adds its name and type to the shared lists that follow them.
+    const lists = configRef.current.lists.map((l) => {
+      if (l.fromCategoryId !== categoryId) return l;
+      const fieldId = l.fromFieldId ?? category.titleFieldId;
+      const value = String((fieldId && values[fieldId]) ?? '').trim();
+      return value && !l.items.some((i) => i.toLowerCase() === value.toLowerCase()) ? { ...l, items: [...l.items, value] } : l;
+    });
+    if (lists.some((l, i) => l !== configRef.current.lists[i])) handleUpdateConfig({ ...configRef.current, lists });
     void runSync(false);
   };
 
@@ -322,10 +320,11 @@ export default function App() {
     const cfg = configRef.current;
     const lists = cfg.lists.map((l) => {
       const source = cfg.categories.find((c) => c.id === l.fromCategoryId);
-      if (!source?.titleFieldId) return l;
+      const fieldId = l.fromFieldId ?? source?.titleFieldId;
+      if (!source || !fieldId) return l;
       const names = entriesRef.current
         .filter((e) => e.categoryId === source.id)
-        .map((e) => String(e.values[source.titleFieldId!] ?? '').trim())
+        .map((e) => String(e.values[fieldId] ?? '').trim())
         .filter(Boolean);
       const missing = [...new Set(names)].filter((n) => !l.items.some((i) => i.toLowerCase() === n.toLowerCase()));
       return missing.length ? { ...l, items: [...l.items, ...missing] } : l;

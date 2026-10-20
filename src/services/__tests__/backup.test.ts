@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SheetsService } from '../sheetsService';
-import { DEFAULT_CATEGORIES } from '../../config/categories';
+import { DEFAULT_CATEGORIES, withDefaultLists } from '../../config/categories';
 import { upgradeCategories } from '../storageService';
 
 function fakeDrive(opts: { existingFolder?: string; copyStatus?: number } = {}) {
@@ -202,5 +202,30 @@ describe('upgradeCategories v5 -> v6', () => {
       expect(f.relatedCategoryId).toBeUndefined();
     }
     expect(out.find((c) => c.id === 'food')).toMatchObject({ quickPicksEnabled: true, quickPicks: [] });
+  });
+});
+
+describe('upgradeCategories v6 -> v7', () => {
+  it("makes Projects' Name and Type dropdowns that take new items", () => {
+    const v6 = DEFAULT_CATEGORIES.map((c) =>
+      c.id === 'projects'
+        ? {
+            ...c,
+            fields: c.fields.map((f) =>
+              f.id === 'name' || f.id === 'type' ? { id: f.id, label: f.label, type: 'text', required: f.required } : f
+            ),
+          }
+        : c
+    );
+    const fields = upgradeCategories(v6 as any[], 6).find((c) => c.id === 'projects').fields;
+    expect(fields.find((f: any) => f.id === 'name')).toMatchObject({ type: 'list', listId: 'projects', allowNew: true, required: true });
+    expect(fields.find((f: any) => f.id === 'type')).toMatchObject({ type: 'list', listId: 'projectTypes', allowNew: true });
+  });
+
+  it('adds the Project types list to saved lists that lack it, keeping the rest', () => {
+    const lists = withDefaultLists([{ id: 'projects', label: 'Projects', items: ['SheetSync'], fromCategoryId: 'projects' }]);
+    expect(lists.map((l) => l.id)).toEqual(['projects', 'projectTypes']);
+    expect(lists[0].items).toEqual(['SheetSync']);
+    expect(lists[1].items).toContain('Practice');
   });
 });

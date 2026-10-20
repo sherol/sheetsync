@@ -1,6 +1,22 @@
 import { CategoryDef, ListDef } from '../types';
 
-export const DEFAULT_LISTS: ListDef[] = [{ id: 'projects', label: 'Projects', items: [], fromCategoryId: 'projects' }];
+export const DEFAULT_LISTS: ListDef[] = [
+  { id: 'projects', label: 'Projects', items: [], fromCategoryId: 'projects' },
+  {
+    id: 'projectTypes',
+    label: 'Project types',
+    items: ['Practice', 'App', 'Music', 'Writing', 'Side project'],
+    fromCategoryId: 'projects',
+    fromFieldId: 'type',
+  },
+];
+
+/** Add any default lists a saved layout doesn't have yet (by id). */
+export function withDefaultLists(lists: ListDef[] | undefined): ListDef[] {
+  const have = lists ?? [];
+  const missing = DEFAULT_LISTS.filter((d) => !have.some((l) => l.id === d.id));
+  return missing.length ? [...have, ...missing] : have;
+}
 import { BIBLE_BOOKS } from './bible';
 
 const SCALE_1_10 = { min: 1, max: 10 };
@@ -106,8 +122,8 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     titleFieldId: 'name',
     dateFieldId: 'date',
     fields: [
-      { id: 'name', label: 'Name', type: 'text', required: true, showInQuickLog: true },
-      { id: 'type', label: 'Type', type: 'text', showInQuickLog: true },
+      { id: 'name', label: 'Name', type: 'list', listId: 'projects', allowNew: true, required: true, showInQuickLog: true },
+      { id: 'type', label: 'Type', type: 'list', listId: 'projectTypes', allowNew: true, showInQuickLog: true },
       { id: 'date', label: 'Date', type: 'date', showInQuickLog: true },
       { id: 'about', label: 'About', type: 'notes', showInQuickLog: true },
       { id: 'links', label: 'Links', type: 'links', showInQuickLog: true },
