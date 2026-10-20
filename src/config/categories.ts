@@ -25,7 +25,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     id: 'food',
     label: 'Medicine',
     title: 'Medicine & Food',
-    sheetName: 'Medicine_Food',
+    sheetName: 'Medicine',
     icon: 'pill',
     color: '#fb923c',
     titleFieldId: 'item',
@@ -78,7 +78,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     id: 'recipes',
     label: 'Meals',
     title: 'Meals & Recipes',
-    sheetName: 'Meals_Recipes',
+    sheetName: 'Meals',
     icon: 'chefHat',
     color: '#10b981',
     titleFieldId: 'name',
@@ -129,7 +129,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     id: 'presentations',
     label: 'Presentations',
     title: 'Presentations & Writings',
-    sheetName: 'Presentations_Writings',
+    sheetName: 'Presentations',
     icon: 'presentation',
     color: '#8b5cf6',
     titleFieldId: 'title',
@@ -148,7 +148,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     id: 'ideas',
     label: 'Prototypes',
     title: 'Prototypes & Ideas',
-    sheetName: 'Prototypes_Ideas',
+    sheetName: 'Prototypes',
     icon: 'lightbulb',
     color: '#d946ef',
     titleFieldId: 'name',
@@ -191,6 +191,27 @@ export function ratingColor(value: number, min = 1, max = 10, alpha = 1): string
   const t = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
   const hue = Math.round(120 - t * 120);
   return `hsl(${hue} 85% 55% / ${alpha})`;
+}
+
+/** The short name shown on tabs and in lists: the first word of the title. */
+export const shortLabel = (title: string) => title.trim().split(/\s+/)[0] || '';
+
+/** Make a valid Google Sheet tab name from free text. */
+export const toSheetName = (text: string) =>
+  text
+    .trim()
+    .replace(/&/g, 'and')
+    .replace(/[\[\]:*?/\\']/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 90);
+
+/** Sheet tab name for a short label, made unique against names already taken (Media, Media_2, ...). */
+export function uniqueSheetName(label: string, taken: string[]): string {
+  const base = toSheetName(label) || 'Tab';
+  if (!taken.includes(base)) return base;
+  let n = 2;
+  while (taken.includes(`${base}_${n}`)) n++;
+  return `${base}_${n}`;
 }
 
 /** Full title of a category, falling back to its short label. */

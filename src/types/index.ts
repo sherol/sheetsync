@@ -35,7 +35,8 @@ export interface CategoryDef {
   id: string;
   label: string; // short name used on tabs and in lists
   title?: string; // full title, e.g. "Media & Books"
-  sheetName: string; // Google Sheet tab name
+  sheetName: string; // Google Sheet tab name: the first word of the title
+  renameFrom?: string; // previous sheet tab name, renamed in the spreadsheet on the next sync
   icon: CategoryIcon;
   color: string; // hex accent
   titleFieldId?: string; // field that names an entry in lists and relation pickers
@@ -63,6 +64,7 @@ export interface AppConfig {
   lastSyncedAt: string | null;
   layoutUpdatedAt: string | null; // when categories or home order last changed on this device
   layoutSyncedTo: string | null; // spreadsheet ID the current layout was backed up to
+  sheetChanged?: boolean; // this device's view of the sheet's changed-since-backup flag
 }
 
 export interface SyncStatus {

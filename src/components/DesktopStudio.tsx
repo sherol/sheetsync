@@ -3,6 +3,7 @@ import { Plus, Trash2, Settings2, Eye, EyeOff, Sparkles, Save, Database, ArrowUp
 import { AppConfig, CategoryDef, CustomField, FieldType } from '../types';
 import { CategoryIcon } from './CategoryIcon';
 import { CategorySettings, COLOR_SWATCHES } from './CategorySettings';
+import { uniqueSheetName } from '../config/categories';
 import { SYSTEM_TABS } from '../services/sheetsService';
 
 interface DesktopStudioProps {
@@ -12,7 +13,6 @@ interface DesktopStudioProps {
   isSavingToSheet: boolean;
   onRequestDeleteField: (category: CategoryDef, field: CustomField) => void;
   onRequestDeleteCategory: (category: CategoryDef) => void;
-  onRenameSheetTab: (category: CategoryDef, newName: string) => Promise<string>;
 }
 
 const FIELD_TYPE_LABELS: Record<FieldType, string> = {
@@ -37,7 +37,6 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   isSavingToSheet,
   onRequestDeleteField,
   onRequestDeleteCategory,
-  onRenameSheetTab,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(config.categories[0]?.id ?? 'settings');
   const [isAddingField, setIsAddingField] = useState(false);
@@ -78,15 +77,14 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   };
 
   const addCategory = () => {
-    const taken = new Set([...config.categories.map((c) => c.sheetName), ...SYSTEM_TABS.map((t) => t.sheetName)]);
-    let n = 1;
-    while (taken.has(n === 1 ? 'New_Tab' : `New_Tab_${n}`)) n++;
+    const taken = [...config.categories.map((c) => c.sheetName), ...SYSTEM_TABS.map((t) => t.sheetName)];
+    const sheetName = uniqueSheetName('New', taken);
     const stamp = Date.now();
     const created: CategoryDef = {
       id: `c_${stamp}`,
       label: 'New',
-      title: n === 1 ? 'New Tab' : `New Tab ${n}`,
-      sheetName: n === 1 ? 'New_Tab' : `New_Tab_${n}`,
+      title: sheetName === 'New' ? 'New Tab' : `New Tab ${sheetName.split('_')[1]}`,
+      sheetName,
       icon: 'star',
       color: COLOR_SWATCHES[config.categories.length % COLOR_SWATCHES.length],
       titleFieldId: `f_${stamp}_name`,
@@ -246,7 +244,6 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                 category={category}
                 onChange={updateCategory}
                 onRequestDelete={() => onRequestDeleteCategory(category)}
-                onRenameSheet={(name) => onRenameSheetTab(category, name)}
                 takenSheetNames={[
                   ...config.categories.filter((c) => c.id !== category.id).map((c) => c.sheetName),
                   ...SYSTEM_TABS.map((t) => t.sheetName),

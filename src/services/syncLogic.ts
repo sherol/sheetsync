@@ -14,6 +14,16 @@ import { upgradeCategories } from './storageService';
  */
 
 export const LAYOUT_KEY = 'schema_config';
+/** App_Config key: TRUE once SheetSync has written to the spreadsheet since its last backup. */
+export const CHANGED_KEY = 'changed_since_backup';
+
+/** The changed-since-backup flag from App_Config rows; null if there is none. */
+export function readChangedFlag(rows: string[][]): boolean | null {
+  for (const row of rows.slice(1)) {
+    if (row[0] === CHANGED_KEY) return String(row[1]).trim().toUpperCase() !== 'FALSE';
+  }
+  return null;
+}
 
 /** True when this entry still has to be written to the given spreadsheet. */
 export function isUnsent(entry: Entry, spreadsheetId: string | null): boolean {
@@ -172,9 +182,9 @@ export function parseLayoutBackup(rows: string[][], schemaVersion: number): Layo
     if (row[0] !== LAYOUT_KEY || !row[1]) continue;
     try {
       const parsed = JSON.parse(row[1]);
-      // Backups from schema v2 (before short tab names + full titles) are upgraded.
+      // Backups from older schemas (v2, v3) are upgraded.
       const version = parsed?.schemaVersion;
-      if ((version !== schemaVersion && version !== 2) || !Array.isArray(parsed.categories)) continue;
+      if (![2, 3, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
       const updatedAt = row[2] ?? '';
       if (best && timeOf(updatedAt) <= timeOf(best.updatedAt)) continue;
       best = {

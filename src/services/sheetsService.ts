@@ -1,5 +1,5 @@
 import { CategoryDef, Entry } from '../types';
-import { LAYOUT_KEY, valueToCell } from './syncLogic';
+import { CHANGED_KEY, LAYOUT_KEY, readChangedFlag, valueToCell } from './syncLogic';
 
 /** Thrown when Google rejects the access token (401), so the app can ask to reconnect. */
 export class SheetsAuthError extends Error {}
@@ -113,10 +113,44 @@ export class SheetsService {
   }
 
   /**
+   * Clear a spreadsheet and rebuild it with one empty tab per category (plus the system tabs),
+   * keeping the same file and ID. Every existing tab is deleted.
+   */
+  static async rebuildSpreadsheet(accessToken: string, spreadsheetId: string, categories: CategoryDef[]): Promise<void> {
+    const batch = async (requests: unknown[]) => {
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests }),
+      });
+      if (!res.ok) throw await failure(res, 'Could not reset the spreadsheet');
+      return res.json();
+    };
+
+    const info = await this.getSpreadsheet(accessToken, spreadsheetId);
+    const oldIds: number[] = (info.sheets || []).map((s: any) => s.properties.sheetId);
+    const placeholder = `_reset_${Date.now()}`;
+
+    // A spreadsheet must always have one tab, so add a placeholder before deleting the rest.
+    const first = await batch([
+      { addSheet: { properties: { title: placeholder } } },
+      ...oldIds.map((sheetId) => ({ deleteSheet: { sheetId } })),
+    ]);
+    const placeholderId = first.replies?.[0]?.addSheet?.properties?.sheetId;
+
+    const tabs = tabsForCategories(categories);
+    await batch([
+      ...tabs.map((tab) => ({ addSheet: { properties: { title: tab.sheetName, gridProperties: { frozenRowCount: 1 } } } })),
+      { deleteSheet: { sheetId: placeholderId } },
+    ]);
+    await this.writeHeaders(accessToken, spreadsheetId, tabs);
+  }
+
+  /**
    * Find the Drive folder SheetSync keeps backups in ("backup" in My Drive), creating it if needed.
    * With the drive.file permission this only sees folders SheetSync created itself.
    */
-  static async findOrCreateBackupFolder(accessToken: string, name = 'backup'): Promise<string> {
+  static async findBackupFolder(accessToken: string, name = 'backup'): Promise<string | null> {
     const q = encodeURIComponent(
       `name='${name}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`
     );
@@ -124,7 +158,11 @@ export class SheetsService {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!listRes.ok) throw await failure(listRes, 'Could not look for the backup folder');
-    const found = (await listRes.json()).files?.[0]?.id;
+    return (await listRes.json()).files?.[0]?.id ?? null;
+  }
+
+  static async findOrCreateBackupFolder(accessToken: string, name = 'backup'): Promise<string> {
+    const found = await this.findBackupFolder(accessToken, name);
     if (found) return found;
 
     const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
@@ -352,10 +390,9 @@ export class SheetsService {
   }
 
   /**
-   * Save the category layout as the single "schema_config" row of the App_Config tab
-   * (the newest such row if older versions appended several).
+   * Set one key in the App_Config tab (overwriting its row, or adding one).
    */
-  static async saveLayout(accessToken: string, spreadsheetId: string, configJson: string, updatedAt: string): Promise<void> {
+  static async setConfigValue(accessToken: string, spreadsheetId: string, key: string, value: string, updatedAt: string): Promise<void> {
     await this.ensureTabsExist(accessToken, spreadsheetId, []);
     const range = encodeURIComponent(`${quoteTab('App_Config')}!A:A`);
     const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`, {
@@ -365,9 +402,9 @@ export class SheetsService {
     const keys: string[][] = (await res.json()).values || [];
     let row = -1;
     keys.forEach((r, i) => {
-      if (i > 0 && r[0] === LAYOUT_KEY) row = i + 1;
+      if (i > 0 && r[0] === key) row = i + 1;
     });
-    const values = [LAYOUT_KEY, `'${configJson}`, `'${updatedAt}`];
+    const values = [key, `'${value}`, `'${updatedAt}`];
     if (row < 0) {
       await this.appendRow(accessToken, spreadsheetId, 'App_Config', values);
       return;
@@ -380,7 +417,94 @@ export class SheetsService {
         body: JSON.stringify({ values: [values] }),
       }
     );
-    if (!put.ok) throw await failure(put, 'Could not save the layout');
+    if (!put.ok) throw await failure(put, `Could not save ${key}`);
+  }
+
+  /**
+   * Save the layout backup to App_Config.
+   */
+  static async saveLayout(accessToken: string, spreadsheetId: string, configJson: string, updatedAt: string): Promise<void> {
+    await this.setConfigValue(accessToken, spreadsheetId, LAYOUT_KEY, configJson, updatedAt);
+  }
+
+  /**
+   * Record whether SheetSync has changed the spreadsheet since its last backup / reset / restore.
+   */
+  static async setChangedSinceBackup(accessToken: string, spreadsheetId: string, changed: boolean): Promise<void> {
+    await this.setConfigValue(accessToken, spreadsheetId, CHANGED_KEY, changed ? 'TRUE' : 'FALSE', new Date().toISOString());
+  }
+
+  /**
+   * The changed-since-backup flag, or null if the spreadsheet has none (treated as changed).
+   */
+  static async getChangedSinceBackup(accessToken: string, spreadsheetId: string): Promise<boolean | null> {
+    const tabs = await this.readTabs(accessToken, spreadsheetId, ['App_Config']);
+    return readChangedFlag(tabs['App_Config'] ?? []);
+  }
+
+  /**
+   * Spreadsheets in the backup folder, newest first (names start with a timestamp).
+   */
+  static async listBackups(accessToken: string): Promise<Array<{ id: string; name: string; modifiedTime: string }>> {
+    const folderId = await this.findBackupFolder(accessToken);
+    if (!folderId) return [];
+    const q = encodeURIComponent(`'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=name desc&pageSize=100`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) throw await failure(res, 'Could not list backups');
+    return (await res.json()).files || [];
+  }
+
+  /**
+   * Replace every tab of a spreadsheet with copies of a backup's tabs (values and formatting),
+   * keeping the same file and ID.
+   */
+  static async restoreFromBackup(accessToken: string, spreadsheetId: string, backupId: string): Promise<void> {
+    const batch = async (requests: unknown[]) => {
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests }),
+      });
+      if (!res.ok) throw await failure(res, 'Could not restore the backup');
+      return res.json();
+    };
+
+    const backup = await this.getSpreadsheet(accessToken, backupId);
+    const backupTabs: { sheetId: number; title: string }[] = (backup.sheets || []).map((s: any) => s.properties);
+    if (backupTabs.length === 0) throw new Error('That backup has no tabs.');
+    const current = await this.getSpreadsheet(accessToken, spreadsheetId);
+    const oldIds: number[] = (current.sheets || []).map((s: any) => s.properties.sheetId);
+
+    const first = await batch([
+      { addSheet: { properties: { title: `_restore_${Date.now()}` } } },
+      ...oldIds.map((sheetId) => ({ deleteSheet: { sheetId } })),
+    ]);
+    const placeholderId = first.replies?.[0]?.addSheet?.properties?.sheetId;
+
+    const copied: { sheetId: number; title: string }[] = [];
+    for (const tab of backupTabs) {
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${backupId}/sheets/${tab.sheetId}:copyTo`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ destinationSpreadsheetId: spreadsheetId }),
+        }
+      );
+      if (!res.ok) throw await failure(res, `Could not copy the ${tab.title} tab from the backup`);
+      copied.push({ sheetId: (await res.json()).sheetId, title: tab.title });
+    }
+
+    // copyTo names tabs "Copy of ..."; give them their original names and order.
+    await batch([
+      ...copied.map((c, index) => ({
+        updateSheetProperties: { properties: { sheetId: c.sheetId, title: c.title, index }, fields: 'title,index' },
+      })),
+      { deleteSheet: { sheetId: placeholderId } },
+    ]);
   }
 
   /**

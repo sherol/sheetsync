@@ -6,12 +6,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { initAuth, googleSignIn, logout } from './services/auth';
-import { StorageService, INITIAL_CONFIG } from './services/storageService';
+import { StorageService, INITIAL_CONFIG, SCHEMA_VERSION } from './services/storageService';
 import { DEFAULT_CATEGORIES } from './config/categories';
 import { SheetsService } from './services/sheetsService';
 import { AppConfig, Entry, CategoryDef, CustomField } from './types';
 import { useSheetSync } from './hooks/useSheetSync';
-import { isUnsent } from './services/syncLogic';
+import { isUnsent, parseLayoutBackup } from './services/syncLogic';
+import { layoutJson } from './services/syncEngine';
 import { Navbar, AppViewMode } from './components/Navbar';
 import { DesktopStudio } from './components/DesktopStudio';
 import { MobileView } from './components/MobileView';
@@ -153,46 +154,106 @@ export default function App() {
     updateConfig((c) => ({ ...c, spreadsheetId: sheetId, spreadsheetName: sheetName }));
   };
 
-  // Reset: copy the connected sheet into Drive's backup/ folder, then start and connect a new one
+  const backupStamp = () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}.${pad(now.getMinutes())}`;
+  };
+
   /**
-   * Create a spreadsheet and connect it. Without a layout to keep, the device goes back to the
-   * default tabs and fields. The chosen layout is backed up to the new sheet on the next sync.
+   * Copy the connected spreadsheet into Drive's backup/ folder, named with a timestamp first, unless
+   * SheetSync hasn't changed it since its last backup. Returns the backup's name, or null if skipped.
    */
-  const startNewSpreadsheet = async (token: string, title: string, keepLayout: boolean) => {
-    const categories = keepLayout ? configRef.current.categories : DEFAULT_CATEGORIES;
-    const created = await SheetsService.createMasterSpreadsheet(token, categories, title);
-    updateConfig((c) => ({
-      ...c,
-      ...(keepLayout ? {} : { categories: DEFAULT_CATEGORIES, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId }),
-      spreadsheetId: created.id,
-      spreadsheetName: created.name,
-      layoutUpdatedAt: new Date().toISOString(),
-      layoutSyncedTo: null,
-      lastSyncedAt: null,
-    }));
-    return created;
+  const backupIfChanged = async (token: string, sheetId: string, sheetName: string): Promise<string | null> => {
+    const changed = await SheetsService.getChangedSinceBackup(token, sheetId);
+    if (changed === false) return null;
+    const backup = await SheetsService.backupSpreadsheet(token, sheetId, `${backupStamp()} ${sheetName}`);
+    return backup.name;
   };
 
-  // "Create New Sheet": a new spreadsheet with the default tabs and fields
-  const handleCreateSpreadsheet = async (title: string): Promise<{ id: string; name: string }> => {
-    if (!accessToken) throw new Error('Please sign in with Google first to create a spreadsheet.');
-    return startNewSpreadsheet(accessToken, title, false);
-  };
-
-  const handleResetSpreadsheet = async ({ keepLayout, title }: { keepLayout: boolean; title: string }): Promise<string> => {
-    const token = accessToken;
-    const old = configRef.current;
-    if (!token || !old.spreadsheetId) throw new Error('Sign in and connect a spreadsheet first.');
-
-    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const backup = await SheetsService.backupSpreadsheet(
-      token,
-      old.spreadsheetId,
-      `${old.spreadsheetName || 'SheetSync'} (backup ${stamp})`
+  /** An error from a step after the backup, saying where the backup is. */
+  const afterBackupError = (what: string, backupName: string | null, err: any) =>
+    new Error(
+      `${what} stopped partway: ${err?.message || err}. ` +
+        (backupName
+          ? `Your spreadsheet was backed up first as "backup/${backupName}"; load it from Backups to restore it.`
+          : 'Load your latest backup from Backups to restore it.')
     );
+
+  /**
+   * After a reset or restore: save the layout to the sheet, mark the sheet unchanged since its
+   * backup, and point this device at it with an empty entry list.
+   */
+  const adoptSheetState = async (token: string, sheetId: string, sheetName: string, layout: Partial<AppConfig>) => {
+    const now = new Date().toISOString();
+    const next: AppConfig = {
+      ...configRef.current,
+      ...layout,
+      spreadsheetId: sheetId,
+      spreadsheetName: sheetName,
+      layoutUpdatedAt: now,
+    };
+    await SheetsService.saveLayout(token, sheetId, layoutJson(next), now);
+    await SheetsService.setChangedSinceBackup(token, sheetId, false);
     updateEntries(() => []);
-    const created = await startNewSpreadsheet(token, title, keepLayout);
-    return `Backed up to "backup/${backup.name}" in Google Drive and connected the new spreadsheet "${created.name}". On your other devices, connect "${created.name}" with "Choose from Drive".`;
+    updateConfig(() => ({ ...next, layoutSyncedTo: sheetId, sheetChanged: false, lastSyncedAt: now }));
+  };
+
+  /**
+   * Reset Sheet. With a spreadsheet connected: back it up (unless unchanged since the last backup),
+   * then clear and rebuild the same file, so every device stays connected to it. With none
+   * connected: create the SheetSync spreadsheet. If the backup fails, nothing changes.
+   */
+  const handleResetSpreadsheet = async ({ keepLayout }: { keepLayout: boolean }): Promise<string> => {
+    const token = accessToken;
+    if (!token) throw new Error('Sign in with Google first.');
+    const current = configRef.current;
+    const categories = (keepLayout ? current.categories : DEFAULT_CATEGORIES).map(({ renameFrom: _old, ...c }) => c);
+    const layout: Partial<AppConfig> = keepLayout
+      ? { categories }
+      : { categories, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId };
+
+    if (!current.spreadsheetId) {
+      const created = await SheetsService.createMasterSpreadsheet(token, categories, 'SheetSync');
+      await adoptSheetState(token, created.id, created.name, layout);
+      return `Created and connected "${created.name}".`;
+    }
+
+    const sheetId = current.spreadsheetId;
+    const sheetName = current.spreadsheetName || 'SheetSync';
+    const backupName = await backupIfChanged(token, sheetId, sheetName);
+    try {
+      await SheetsService.rebuildSpreadsheet(token, sheetId, categories);
+      await adoptSheetState(token, sheetId, sheetName, layout);
+    } catch (err: any) {
+      throw afterBackupError('Reset', backupName, err);
+    }
+    return backupName
+      ? `Backed up to "backup/${backupName}" in Google Drive and reset "${sheetName}".`
+      : `Reset "${sheetName}". No backup was needed: nothing had changed since the last one.`;
+  };
+
+  /**
+   * Load a backup into the SheetSync spreadsheet (same file), after backing up the current
+   * contents unless they're unchanged. Takes the backup's layout if it has one.
+   */
+  const handleLoadBackup = async (backup: { id: string; name: string }): Promise<string> => {
+    const token = accessToken;
+    const current = configRef.current;
+    if (!token || !current.spreadsheetId) throw new Error('Sign in and connect your SheetSync spreadsheet first.');
+    const sheetId = current.spreadsheetId;
+    const sheetName = current.spreadsheetName || 'SheetSync';
+
+    const backupName = await backupIfChanged(token, sheetId, sheetName);
+    try {
+      await SheetsService.restoreFromBackup(token, sheetId, backup.id);
+      const tabs = await SheetsService.readTabs(token, sheetId, ['App_Config']);
+      const restored = parseLayoutBackup(tabs['App_Config'] ?? [], SCHEMA_VERSION);
+      await adoptSheetState(token, sheetId, sheetName, restored ? restored.layout : {});
+    } catch (err: any) {
+      throw afterBackupError('Loading the backup', backupName, err);
+    }
+    return `${backupName ? `Backed up the current sheet to "backup/${backupName}", then loaded` : 'Loaded'} "${backup.name}" into "${sheetName}".`;
   };
 
   // "Save Layout to Sheet": back up the layout now
@@ -241,24 +302,6 @@ export default function App() {
     } finally {
       setIsSyncingReport(false);
     }
-  };
-
-  // Rename a category's Google Sheet tab (in the sheet too, when connected)
-  const handleRenameSheetTab = async (category: CategoryDef, newName: string): Promise<string> => {
-    let message = `Sheet tab is now "${newName}". It will be created there on the next save.`;
-    if (accessToken && config.spreadsheetId) {
-      const renamed = await SheetsService.renameTab(accessToken, config.spreadsheetId, category.sheetName, newName);
-      message = renamed
-        ? `Renamed "${category.sheetName}" to "${newName}" in your Google Sheet.`
-        : `No "${category.sheetName}" tab in your sheet yet; "${newName}" will be created on the next save.`;
-    } else if (config.spreadsheetId) {
-      message = `Sheet tab is now "${newName}" in the app. Sign in with Google and rename "${category.sheetName}" in the sheet too, or a new tab will be created on the next save.`;
-    }
-    handleUpdateConfig({
-      ...config,
-      categories: config.categories.map((c) => (c.id === category.id ? { ...c, sheetName: newName } : c)),
-    });
-    return message;
   };
 
   // Destructive Confirmation: Delete Category
@@ -362,7 +405,6 @@ export default function App() {
                   isSavingToSheet={sync.state === 'syncing'}
                   onRequestDeleteField={requestDeleteField}
                   onRequestDeleteCategory={requestDeleteCategory}
-                  onRenameSheetTab={handleRenameSheetTab}
                 />
               </div>
 
@@ -424,7 +466,7 @@ export default function App() {
         config={config}
         onUpdateSpreadsheet={handleUpdateSpreadsheet}
         onResetSpreadsheet={handleResetSpreadsheet}
-        onCreateSpreadsheet={handleCreateSpreadsheet}
+        onLoadBackup={handleLoadBackup}
         entryCount={entries.length}
         accessToken={accessToken}
         onLoginClick={handleLogin}

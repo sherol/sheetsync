@@ -22,6 +22,7 @@ The screenshots use example data.
 - [Bible study tracker](#bible-study-tracker)
 - [Monthly report](#monthly-report)
 - [Category Studio](#category-studio)
+- [Resetting the sheet and backups](#resetting-the-sheet-and-backups)
 - [How data is stored and synced](#how-data-is-stored-and-synced)
 - [Development](#development)
 - [License](#license)
@@ -30,9 +31,9 @@ The screenshots use example data.
 
 1. Open the app. On a phone or tablet it opens in **Mobile / iPad App** view; on a wide screen it opens in **Category Studio**.
 2. Select **Connect Google** and sign in. SheetSync asks for permission to edit spreadsheets it creates or opens.
-3. Select the spreadsheet status under the SheetSync name in the top bar to open the spreadsheet dialog, then do one of these:
-   - **Create** a new spreadsheet. It starts with the default ten tabs and fields (your tabs on that device go back to the defaults), plus `Monthly_Reports` and `App_Config`.
-   - **Pick** an existing spreadsheet from your Drive, or **paste** its URL or ID. SheetSync adds any missing tabs and leaves existing tabs alone.
+3. Select the spreadsheet status under the SheetSync name in the top bar to open the spreadsheet dialog. SheetSync uses **one spreadsheet**, plus dated backups of it:
+   - **First device:** on **Reset Sheet**, tap **Create SheetSync spreadsheet**. It creates a spreadsheet named "SheetSync" with your tabs (or the defaults), plus `Monthly_Reports` and `App_Config`.
+   - **Other devices:** connect that same spreadsheet with **Choose from Drive**, or paste its URL or ID under **Enter ID / URL**.
 4. Start logging. Entries also save on the device, so the app works before you connect a sheet; anything logged offline is sent once you connect.
 
 ## The three views
@@ -54,14 +55,14 @@ SheetSync starts with ten categories. Each one is a tab in the app and a tab in 
 | Tab · full title | Sheet tab | Fields |
 |---|---|---|
 | **Media** · Media & Books | `Media` | Title, Type (Book / Movie / TV / Game), Date Consumed, Review, Links |
-| **Medicine** · Medicine & Food | `Medicine_Food` | Date, Time, Type (Med / Snack / Meal / Drink), Food / Drink / Activity, Amount, How do I feel?, Hunger Level 1–10, Burning Level 1–10, Stress 1–10 |
+| **Medicine** · Medicine & Food | `Medicine` | Date, Time, Type (Med / Snack / Meal / Drink), Food / Drink / Activity, Amount, How do I feel?, Hunger Level 1–10, Burning Level 1–10, Stress 1–10 |
 | **Memories** · Memories & Milestones | `Memories` | Date, Location, Who Was There, What Happened, Results |
 | **Mood** · Mood & Feelings | `Mood` | Date, Mood Score 1–10, Daily Recap |
-| **Meals** · Meals & Recipes | `Meals_Recipes` | Name, Type, Ingredients, Directions, Last Cooked, Links |
+| **Meals** · Meals & Recipes | `Meals` | Name, Type, Ingredients, Directions, Last Cooked, Links |
 | **Projects** · Projects & Initiatives | `Projects` | Name, Type, Date, About, Links |
 | **People** · People & Friends | `People` | Name, Last Contact, To-dos, Associated Projects |
-| **Presentations** · Presentations & Writings | `Presentations_Writings` | Title, About, Where, When, Who Was There, Slides, Links |
-| **Prototypes** · Prototypes & Ideas | `Prototypes_Ideas` | Name, Type, Date, Idea, Related Projects, Links |
+| **Presentations** · Presentations & Writings | `Presentations` | Title, About, Where, When, Who Was There, Slides, Links |
+| **Prototypes** · Prototypes & Ideas | `Prototypes` | Name, Type, Date, Idea, Related Projects, Links |
 | **Prayer** · Prayer & Theology | `Prayer` | Date, Prayer, Book Studied, Chapters, Study Notes, Answered (Waiting / Answered) |
 
 You can rename, recolour, reorder, add and delete categories and their fields in [Category Studio](#category-studio).
@@ -132,11 +133,9 @@ The studio is where you change what you track. A sidebar lists the categories; s
 ### Tab settings
 
 - **Icon:** tap the large icon square to open the icon library. It has about 100 icons in six groups (Media & Hobbies, Food & Drink, Health & Mood, Work & Ideas, People & Places, Faith & Life) and a search box.
-- **Title:** for example "Media & Books". It's the form heading and shows under the name on the home screen; tabs and lists use its first word ("Media"). Changing it does **not** change the Google Sheet.
-- **Google Sheet tab:** the spreadsheet tab this category writes to.
-  - **Match title** fills in a sheet-safe version of the title; for example, "Books & Films" becomes `Books_and_Films`.
-  - **Rename sheet tab** applies it. If you're signed in and the sheet has a tab with the old name, that tab is renamed in the spreadsheet and keeps all its rows. Otherwise the app switches to the new name and creates that tab on the next save.
-  - Names already used by another tab aren't allowed.
+- **Title:** for example "Media & Books". It's the form heading and shows under the name on the home screen. Its first word ("Media") names the tab in the app **and** the tab in your Google Sheet.
+  - Change the title and the sheet tab is renamed in the spreadsheet on the next sync, keeping all its rows. The studio shows "renamed from … on the next sync" until then.
+  - If two tabs would get the same first word, the second sheet tab gets a number (`New`, `New_2`).
 - **Colour:** pick one of 12 swatches, or any custom colour.
 - **Delete tab:** removes the category and its entries from this device, after you confirm. The tab in Google Sheets is not touched.
 
@@ -161,21 +160,30 @@ The studio is where you change what you track. A sidebar lists the categories; s
 
 Your setup is backed up to the `App_Config` tab automatically a couple of seconds after each change, while you're connected. **Save Layout to Sheet** backs it up right away.
 
-## Resetting the sheet
+## Resetting the sheet and backups
 
-To start over with an empty spreadsheet, tap the spreadsheet name in the top bar and open **Reset Sheet**:
+SheetSync keeps **one spreadsheet**. Resets and restores change that same file, so every device stays connected to it, and copies go into a `backup` folder in your Google Drive. Tap the spreadsheet name in the top bar to find both.
 
-1. Choose the tabs and fields for the new sheet:
-   - **Keep the current schema:** the same tabs, names, icons and fields you have now.
-   - **Start with a new schema:** the default ten tabs, ready to customise.
-2. Optionally give the new spreadsheet a title, tick the confirmation, and tap **Back up and reset**.
+### Reset Sheet
 
-SheetSync then:
-- copies the current spreadsheet into a folder named `backup` in your Google Drive, as "_name_ (backup _date time_)". The original spreadsheet is left where it is.
-- creates the new spreadsheet with the chosen tabs, connects it, and saves the layout to its `App_Config` tab.
-- clears this device's entry list, so old entries aren't sent to the new sheet. They're all in the backup.
+The first tab of the spreadsheet dialog. Choose the tabs and fields:
+- **Keep the current schema:** the same tabs, names, icons and fields you have now.
+- **Start with a new schema:** the default ten tabs, ready to customise.
 
-On your other devices, connect the new spreadsheet with **Choose from Drive**. If the backup step fails, nothing is changed.
+Tick the confirmation and tap **Back up and reset**. SheetSync then:
+1. copies the spreadsheet into `backup/`, named with the date and time first (e.g. `2026-10-20 03.30 SheetSync`), unless nothing has changed since the last backup.
+2. empties the same spreadsheet and rebuilds it with the chosen tabs, saving the layout to `App_Config`. Other devices pick up the new layout on their next sync.
+3. clears this device's entry list, so old entries aren't sent again. They're in the backup.
+
+If the backup step fails, nothing is changed. With no spreadsheet connected yet, the same button creates the SheetSync spreadsheet instead.
+
+### Backups
+
+The **Backups** tab lists the spreadsheets in `backup/`, newest first. Each has a link to open it in Google Sheets, and **Load** replaces the contents of your SheetSync spreadsheet with that backup (values and formatting, tab by tab). Before loading, the current contents are backed up the same way, unless nothing has changed since the last backup. The backup's tabs and fields become your layout, and this device's entry list is cleared.
+
+### Changed since backup
+
+`App_Config` holds a `changed_since_backup` flag. SheetSync sets it to `TRUE` the first time it writes an entry, the layout or a tab rename after a backup, and to `FALSE` after a reset or a restore. Reset and Load skip the backup only when it's `FALSE`. Edits you make directly in Google Sheets don't set the flag, so a manual edit right after a reset isn't treated as a change.
 
 ## How data is stored and synced
 
@@ -189,7 +197,7 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
   - Rows are matched by ID, so editing an entry updates its row.
   - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.
 - **Staying connected:** Google sign-in lasts about an hour and survives reloading the page, until you close the tab. When it runs out, the header shows **Reconnect**. Your entries are kept and sent once you reconnect.
-- **Switching spreadsheets:** connecting a different spreadsheet sends every entry on the device to it.
+- **Switching spreadsheets:** connecting a different spreadsheet sends every entry on the device to it. Normally you won't need to: Reset and Load change the one SheetSync spreadsheet in place.
 - **Changing fields later:** reordering or deleting fields changes the header row, but rows already in the sheet keep their original column positions.
 - **Older versions of SheetSync:** if you used the earlier Life / Health / Prayer / Habits version, your connected spreadsheet stays linked. Its old tabs are left untouched, and the new category tabs are added beside them.
 

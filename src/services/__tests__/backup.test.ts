@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SheetsService } from '../sheetsService';
+import { DEFAULT_CATEGORIES } from '../../config/categories';
+import { upgradeCategories } from '../storageService';
 
 function fakeDrive(opts: { existingFolder?: string; copyStatus?: number } = {}) {
   const calls: { method: string; url: string; body: any }[] = [];
@@ -44,5 +46,101 @@ describe('backupSpreadsheet', () => {
   it('explains when Drive does not let SheetSync copy the sheet', async () => {
     fakeDrive({ copyStatus: 404 });
     await expect(SheetsService.backupSpreadsheet('t', 'sheet-1', 'copy')).rejects.toThrow(/not allowed to copy/);
+  });
+});
+
+/** A spreadsheet with tabs addressed by sheetId, enough for rebuild/restore. */
+function fakeBook(files: Record<string, string[]>) {
+  let nextId = 1;
+  const books = new Map(
+    Object.entries(files).map(([file, titles]) => [file, titles.map((title) => ({ sheetId: nextId++, title }))])
+  );
+  const fetchMock = vi.fn(async (input: string, init: RequestInit = {}) => {
+    const url = new URL(input);
+    const body = init.body ? JSON.parse(String(init.body)) : null;
+    const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
+    const copy = url.pathname.match(/spreadsheets\/([^/]+)\/sheets\/(\d+):copyTo$/);
+    if (copy) {
+      const src = books.get(copy[1])!.find((t) => t.sheetId === Number(copy[2]))!;
+      const tab = { sheetId: nextId++, title: `Copy of ${src.title}` };
+      books.get(body.destinationSpreadsheetId)!.push(tab);
+      return json({ sheetId: tab.sheetId, title: tab.title });
+    }
+    const file = url.pathname.match(/spreadsheets\/([^/:]+)/)![1];
+    const tabs = books.get(file)!;
+    if (url.pathname.endsWith(':batchUpdate') && !url.pathname.includes('/values')) {
+      const replies = body.requests.map((r: any) => {
+        if (r.addSheet) {
+          const tab = { sheetId: nextId++, title: r.addSheet.properties.title };
+          tabs.push(tab);
+          return { addSheet: { properties: tab } };
+        }
+        if (r.deleteSheet) tabs.splice(tabs.findIndex((t) => t.sheetId === r.deleteSheet.sheetId), 1);
+        if (r.updateSheetProperties) {
+          const p = r.updateSheetProperties.properties;
+          const tab = tabs.find((t) => t.sheetId === p.sheetId)!;
+          tab.title = p.title;
+          tabs.splice(tabs.indexOf(tab), 1);
+          tabs.splice(p.index, 0, tab);
+        }
+        return {};
+      });
+      return json({ replies });
+    }
+    if (url.pathname.includes('/values')) return json({});
+    return json({ sheets: tabs.map((t) => ({ properties: t })) });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { titles: (file: string) => books.get(file)!.map((t) => t.title) };
+}
+
+describe('rebuildSpreadsheet / restoreFromBackup', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('empties the same file and recreates one tab per category plus the system tabs', async () => {
+    const book = fakeBook({ main: ['Media', 'Medicine_Food', 'Old_Tab'] });
+    await SheetsService.rebuildSpreadsheet('t', 'main', DEFAULT_CATEGORIES.slice(0, 2));
+    expect(book.titles('main')).toEqual(['Media', 'Medicine', 'Monthly_Reports', 'App_Config']);
+  });
+
+  it("replaces the file's tabs with the backup's, under their original names and order", async () => {
+    const book = fakeBook({ main: ['Media', 'Junk'], backup1: ['Media', 'Prayer', 'App_Config'] });
+    await SheetsService.restoreFromBackup('t', 'main', 'backup1');
+    expect(book.titles('main')).toEqual(['Media', 'Prayer', 'App_Config']);
+  });
+});
+
+describe('listBackups', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lists spreadsheets in the backup folder, newest name first, and is empty without a folder', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        urls.push(decodeURIComponent(input));
+        if (input.includes(encodeURIComponent("name='backup'"))) return new Response(JSON.stringify({ files: [{ id: 'f1' }] }));
+        return new Response(JSON.stringify({ files: [{ id: 'b1', name: '2026-10-20 03.30 SheetSync', modifiedTime: 'x' }] }));
+      })
+    );
+    expect(await SheetsService.listBackups('t')).toHaveLength(1);
+    expect(urls[1]).toContain("'f1' in parents");
+    expect(urls[1]).toContain('orderBy=name desc');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ files: [] }))));
+    expect(await SheetsService.listBackups('t')).toEqual([]);
+  });
+});
+
+describe('upgradeCategories v3 -> v4', () => {
+  it('moves old two-word sheet tab names to the first word and remembers the old name', () => {
+    const v3 = DEFAULT_CATEGORIES.map((c) =>
+      c.id === 'food' ? { ...c, sheetName: 'Medicine_Food' } : c.id === 'recipes' ? { ...c, sheetName: 'My_Recipes' } : c
+    );
+    const out = upgradeCategories(v3, 3);
+    expect(out.find((c) => c.id === 'food')).toMatchObject({ sheetName: 'Medicine', renameFrom: 'Medicine_Food' });
+    // A sheet tab the user named themselves is left alone.
+    expect(out.find((c) => c.id === 'recipes')).toMatchObject({ sheetName: 'My_Recipes' });
+    expect(out.find((c) => c.id === 'recipes').renameFrom).toBeUndefined();
   });
 });

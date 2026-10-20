@@ -10,6 +10,11 @@ const SHEET = 'sheet-1';
 /** In-memory Google Sheets: stores cells as displayed, and applies USER_ENTERED's apostrophe rule. */
 function fakeSheets(initial: Record<string, string[][]> = {}, opts: { status?: number } = {}) {
   const tabs = new Map(Object.entries(initial).map(([k, v]) => [k, v.map((r) => [...r])]));
+  const ids = new Map<string, number>();
+  const idOf = (title: string) => {
+    if (!ids.has(title)) ids.set(title, ids.size + 100);
+    return ids.get(title)!;
+  };
   const parse = (range: string) => {
     const m = range.match(/^'((?:[^']|'')*)'(?:!A(\d+)?(?::[A-Z]+\d*)?)?$/)!;
     return { tab: m[1].replace(/''/g, "'"), row: m[2] ? Number(m[2]) : undefined };
@@ -31,11 +36,25 @@ function fakeSheets(initial: Record<string, string[][]> = {}, opts: { status?: n
     const raw = (body?.valueInputOption ?? url.searchParams.get('valueInputOption')) === 'RAW';
 
     if (path === '' && !init.method) {
-      return json({ sheets: [...tabs.keys()].map((title, i) => ({ properties: { title, sheetId: i } })) });
+      return json({ sheets: [...tabs.keys()].map((title) => ({ properties: { title, sheetId: idOf(title) } })) });
     }
     if (path === ':batchUpdate') {
-      body.requests.forEach((r: any) => tabs.set(r.addSheet.properties.title, []));
-      return json({});
+      const replies = body.requests.map((r: any) => {
+        if (r.addSheet) {
+          tabs.set(r.addSheet.properties.title, []);
+          return { addSheet: { properties: { title: r.addSheet.properties.title, sheetId: idOf(r.addSheet.properties.title) } } };
+        }
+        const title = [...ids.entries()].find(([, id]) => id === (r.updateSheetProperties?.properties.sheetId ?? r.deleteSheet?.sheetId))?.[0];
+        if (r.deleteSheet && title) tabs.delete(title);
+        if (r.updateSheetProperties && title) {
+          const next = r.updateSheetProperties.properties.title;
+          tabs.set(next, tabs.get(title)!);
+          tabs.delete(title);
+          ids.set(next, ids.get(title)!);
+        }
+        return {};
+      });
+      return json({ replies });
     }
     if (path === '/values:batchGet') {
       return json({ valueRanges: url.searchParams.getAll('ranges').map((r) => ({ values: tabs.get(parse(r).tab) })) });
@@ -160,16 +179,18 @@ describe('syncOnce', () => {
     const { tabs } = fakeSheets({});
     const d = device({ layoutUpdatedAt: '2026-10-19T00:00:00.000Z' });
     await d.run(false);
-    const backup = tabs.get('App_Config')!;
-    expect(backup[1][0]).toBe('schema_config');
-    expect(backup[1][2]).toBe('2026-10-19T00:00:00.000Z');
-    expect(JSON.parse(backup[1][1]).categories).toHaveLength(DEFAULT_CATEGORIES.length);
+    const layoutRow = () => tabs.get('App_Config')!.find((r) => r[0] === 'schema_config')!;
+    expect(layoutRow()[2]).toBe('2026-10-19T00:00:00.000Z');
+    expect(JSON.parse(layoutRow()[1]).categories).toHaveLength(DEFAULT_CATEGORIES.length);
     expect(d.configRef.current.layoutSyncedTo).toBe(SHEET);
+    // Writing the layout flags the sheet as changed since its last backup.
+    expect(tabs.get('App_Config')!.find((r) => r[0] === 'changed_since_backup')![1]).toBe('TRUE');
+    expect(d.configRef.current.sheetChanged).toBe(true);
 
-    // A second change updates the same row.
+    // A second change updates the same rows.
     d.configRef.current = { ...d.configRef.current, layoutUpdatedAt: '2026-10-19T01:00:00.000Z', layoutSyncedTo: null };
     await d.run(false);
-    expect(tabs.get('App_Config')!).toHaveLength(2);
+    expect(tabs.get('App_Config')!).toHaveLength(3);
 
     fakeSheets({}, { status: 401 });
     await expect(device({}, [prayer('p', '2026-10-19T00:00:00.000Z', '1')]).run()).rejects.toBeInstanceOf(SheetsAuthError);
@@ -209,5 +230,35 @@ describe('syncOnce', () => {
     const cats = d.configRef.current.categories;
     expect(cats.find((c) => c.id === 'media')).toMatchObject({ label: 'Media', title: 'Media & Books' });
     expect(cats.find((c) => c.id === 'mood')).toMatchObject({ label: 'My Mood' });
+  });
+
+  it('renames a sheet tab whose name changed, keeping its rows', async () => {
+    const { tabs } = fakeSheets({
+      Medicine_Food: [['ID', 'Saved At', 'Date'], ['food_1', '2026-10-01T00:00:00.000Z', '2026-10-01']],
+    });
+    const cats = DEFAULT_CATEGORIES.map((c) => (c.id === 'food' ? { ...c, renameFrom: 'Medicine_Food' } : c));
+    const d = device({ categories: cats, layoutUpdatedAt: '2026-10-19T00:00:00.000Z' });
+    await d.run(true, false);
+
+    expect(tabs.has('Medicine_Food')).toBe(false);
+    expect(tabs.get('Medicine')![1][0]).toBe('food_1');
+    expect(d.configRef.current.categories.some((c) => c.renameFrom)).toBe(false);
+    expect(JSON.parse(tabs.get('App_Config')!.find((r) => r[0] === 'schema_config')![1]).categories.some((c: any) => c.renameFrom)).toBe(false);
+  });
+
+  it("reads the sheet's changed flag and only writes it when it isn't already set", async () => {
+    const { tabs, fetchMock } = fakeSheets({
+      App_Config: [['Key', 'JSON Value', 'Last Updated'], ['changed_since_backup', 'FALSE', '2026-10-19T00:00:00.000Z']],
+    });
+    const d = device({ sheetChanged: true }, [prayer('prayer_1', '2026-10-19T08:00:00.000Z', '1')]);
+    await d.run(true, false);
+    // The sheet said FALSE (e.g. reset on another device), so sending an entry sets it again.
+    expect(tabs.get('App_Config')!.find((r) => r[0] === 'changed_since_backup')![1]).toBe('TRUE');
+
+    fetchMock.mockClear();
+    d.entriesRef.current = [...d.entriesRef.current, prayer('prayer_2', '2026-10-19T09:00:00.000Z', '2')];
+    await d.run(false);
+    const writesToConfig = fetchMock.mock.calls.filter(([u, init]) => (init as RequestInit)?.method && decodeURIComponent(String(u)).includes('App_Config'));
+    expect(writesToConfig).toHaveLength(0);
   });
 });

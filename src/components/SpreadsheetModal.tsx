@@ -21,10 +21,10 @@ interface SpreadsheetModalProps {
   onUpdateSpreadsheet: (sheetId: string, sheetName: string) => void;
   accessToken: string | null;
   onLoginClick: () => void;
-  /** Back up the connected sheet into Drive's backup/ folder and start a new one. Resolves with a summary. */
-  onResetSpreadsheet: (opts: { keepLayout: boolean; title: string }) => Promise<string>;
-  /** Create and connect a spreadsheet with the default tabs and fields. */
-  onCreateSpreadsheet: (title: string) => Promise<{ id: string; name: string }>;
+  /** Reset (or, with none connected, create) the SheetSync spreadsheet. Resolves with a summary. */
+  onResetSpreadsheet: (opts: { keepLayout: boolean }) => Promise<string>;
+  /** Load a backup into the SheetSync spreadsheet. Resolves with a summary. */
+  onLoadBackup: (backup: { id: string; name: string }) => Promise<string>;
   entryCount: number;
 }
 
@@ -36,33 +36,61 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
   accessToken,
   onLoginClick,
   onResetSpreadsheet,
-  onCreateSpreadsheet,
+  onLoadBackup,
   entryCount,
 }) => {
-  const [activeTab, setActiveTab] = useState<'create' | 'drive' | 'manual' | 'reset'>('create');
+  const [activeTab, setActiveTab] = useState<'reset' | 'backups' | 'drive' | 'manual'>('reset');
   const [keepLayout, setKeepLayout] = useState(true);
-  const [resetTitle, setResetTitle] = useState('');
   const [resetConfirmed, setResetConfirmed] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [backups, setBackups] = useState<Array<{ id: string; name: string; modifiedTime: string }> | null>(null);
+  const [confirmBackupId, setConfirmBackupId] = useState<string | null>(null);
+  const [loadingBackupId, setLoadingBackupId] = useState<string | null>(null);
 
   const handleReset = async () => {
-    if (!accessToken || !config.spreadsheetId || !resetConfirmed) return;
+    if (!accessToken || (config.spreadsheetId && !resetConfirmed)) return;
     setIsResetting(true);
     setStatusMessage(null);
     try {
-      const text = await onResetSpreadsheet({
-        keepLayout,
-        title: resetTitle.trim() || config.spreadsheetName || 'SheetSync - Personal Tracker',
-      });
-      setStatusMessage({ type: 'success', text });
+      setStatusMessage({ type: 'success', text: await onResetSpreadsheet({ keepLayout }) });
       setResetConfirmed(false);
+      setBackups(null);
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err?.message || 'Reset failed. Nothing was changed.' });
+      setStatusMessage({ type: 'error', text: err?.message || 'Reset failed.' });
     } finally {
       setIsResetting(false);
     }
   };
-  const [newTitle, setNewTitle] = useState('SheetSync - Personal Tracker');
+
+  const loadBackups = async () => {
+    if (!accessToken) return;
+    setStatusMessage(null);
+    try {
+      setBackups(await SheetsService.listBackups(accessToken));
+    } catch (err: any) {
+      setBackups([]);
+      setStatusMessage({ type: 'error', text: err?.message || 'Could not list backups' });
+    }
+  };
+
+  const handleLoadBackup = async (backup: { id: string; name: string }) => {
+    setLoadingBackupId(backup.id);
+    setStatusMessage(null);
+    try {
+      setStatusMessage({ type: 'success', text: await onLoadBackup(backup) });
+      setConfirmBackupId(null);
+      setBackups(null);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err?.message || 'Could not load the backup.' });
+    } finally {
+      setLoadingBackupId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && accessToken && activeTab === 'backups' && backups === null) void loadBackups();
+  }, [isOpen, accessToken, activeTab, backups]);
+
   const [manualInput, setManualInput] = useState('');
   const [driveSheets, setDriveSheets] = useState<Array<{ id: string; name: string; modifiedTime: string }>>([]);
   const [isLoadingDrive, setIsLoadingDrive] = useState(false);
@@ -86,26 +114,6 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
       setStatusMessage({ type: 'error', text: err.message || 'Could not load spreadsheets from Drive' });
     } finally {
       setIsLoadingDrive(false);
-    }
-  };
-
-  const handleCreateNew = async () => {
-    if (!accessToken) {
-      setStatusMessage({ type: 'error', text: 'Please sign in with Google first to create a spreadsheet.' });
-      return;
-    }
-    setIsCreating(true);
-    setStatusMessage(null);
-    try {
-      const res = await onCreateSpreadsheet(newTitle || 'SheetSync - Personal Tracker');
-      setStatusMessage({ type: 'success', text: `Created and linked "${res.name}"!` });
-      setTimeout(() => {
-        onClose();
-      }, 1200);
-    } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Failed to create spreadsheet' });
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -242,17 +250,29 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
         )}
 
         {/* Tab Selection */}
-        <div className="mt-4 flex border-b border-stone-800 text-xs font-semibold gap-2">
+        <div className="mt-4 flex flex-wrap border-b border-stone-800 text-xs font-semibold gap-2">
           <button
-            onClick={() => setActiveTab('create')}
+            onClick={() => setActiveTab('reset')}
             className={`pb-2.5 px-3.5 border-b-2 transition-all ${
-              activeTab === 'create'
-                ? 'border-pink-500 text-pink-300 font-extrabold'
+              activeTab === 'reset'
+                ? 'border-rose-500 text-rose-300 font-extrabold'
                 : 'border-transparent text-stone-400 hover:text-stone-200'
             }`}
           >
-            Create New Sheet
+            Reset Sheet
           </button>
+          {config.spreadsheetId && (
+          <button
+              onClick={() => setActiveTab('backups')}
+              className={`pb-2.5 px-3.5 border-b-2 transition-all ${
+                activeTab === 'backups'
+                  ? 'border-amber-500 text-amber-300 font-extrabold'
+                  : 'border-transparent text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              Backups
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('drive')}
             className={`pb-2.5 px-3.5 border-b-2 transition-all ${
@@ -273,45 +293,41 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
           >
             Enter ID / URL
           </button>
-          {config.spreadsheetId && (
-            <button
-              onClick={() => setActiveTab('reset')}
-              className={`pb-2.5 px-3.5 border-b-2 transition-all ${
-                activeTab === 'reset'
-                  ? 'border-rose-500 text-rose-300 font-extrabold'
-                  : 'border-transparent text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Reset Sheet
-            </button>
-          )}
         </div>
 
         {/* Content per Tab */}
         <div className="mt-4 flex-1 overflow-y-auto">
-          {activeTab === 'reset' && config.spreadsheetId && (
+          {activeTab === 'reset' && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-[#171926] border border-stone-800 text-xs text-stone-300 space-y-2">
-                <span className="font-bold text-white block">Reset starts a fresh spreadsheet:</span>
-                <ol className="list-decimal pl-4 space-y-1">
-                  <li>
-                    A copy of <span className="font-semibold text-white">{config.spreadsheetName || 'the current sheet'}</span> is
-                    saved to the <span className="font-mono text-white">backup</span> folder in your Google Drive. The original
-                    stays where it is.
-                  </li>
-                  <li>A new, empty spreadsheet is created and connected.</li>
-                  <li>
-                    This device's list of {entryCount} entr{entryCount === 1 ? 'y' : 'ies'} is cleared, so nothing old is sent to the
-                    new sheet. Everything is still in the backup.
-                  </li>
-                </ol>
+                {config.spreadsheetId ? (
+                  <>
+                    <span className="font-bold text-white block">
+                      Reset clears <span className="text-rose-300">{config.spreadsheetName || 'your SheetSync spreadsheet'}</span> and starts it fresh:
+                    </span>
+                    <ol className="list-decimal pl-4 space-y-1">
+                      <li>
+                        A copy is saved to the <span className="font-mono text-white">backup</span> folder in your Google Drive, named
+                        with the date and time first, unless nothing has changed since the last backup.
+                      </li>
+                      <li>The same spreadsheet is emptied and rebuilt with the tabs below. Other devices stay connected to it.</li>
+                      <li>
+                        This device's list of {entryCount} entr{entryCount === 1 ? 'y' : 'ies'} is cleared, so nothing old is sent again.
+                      </li>
+                    </ol>
+                  </>
+                ) : (
+                  <span className="font-bold text-white block">
+                    Creates your <span className="text-rose-300">SheetSync</span> spreadsheet in Google Drive with the tabs below and connects it.
+                  </span>
+                )}
               </div>
 
               <fieldset className="space-y-2">
-                <legend className="text-xs font-medium text-stone-300 mb-1">Tabs and fields for the new sheet</legend>
+                <legend className="text-xs font-medium text-stone-300 mb-1">Tabs and fields</legend>
                 {[
                   { value: true, title: 'Keep the current schema', body: 'Same tabs, names, icons and fields you have now.' },
-                  { value: false, title: 'Start with a new schema', body: 'The default ten tabs and fields. You can customise them afterwards.' },
+                  { value: false, title: 'Start with a new schema', body: `The default ten tabs: ${DEFAULT_CATEGORIES.map((c) => c.sheetName).join(', ')}.` },
                 ].map((o) => (
                   <label
                     key={String(o.value)}
@@ -319,13 +335,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
                       keepLayout === o.value ? 'border-rose-500/50 bg-rose-950/20' : 'border-stone-800 bg-stone-900/60 hover:border-stone-700'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="reset-schema"
-                      checked={keepLayout === o.value}
-                      onChange={() => setKeepLayout(o.value)}
-                      className="mt-0.5"
-                    />
+                    <input type="radio" name="reset-schema" checked={keepLayout === o.value} onChange={() => setKeepLayout(o.value)} className="mt-0.5" />
                     <span>
                       <span className="block text-xs font-bold text-white">{o.title}</span>
                       <span className="block text-[11px] text-stone-400">{o.body}</span>
@@ -334,97 +344,83 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
                 ))}
               </fieldset>
 
-              <div>
-                <label htmlFor="reset-title" className="block text-xs font-medium text-stone-300 mb-1">
-                  New spreadsheet title
+              {config.spreadsheetId && (
+                <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                  <input type="checkbox" checked={resetConfirmed} onChange={(e) => setResetConfirmed(e.target.checked)} />
+                  <span>I understand the spreadsheet is emptied and this device starts with an empty entry list.</span>
                 </label>
-                <input
-                  id="reset-title"
-                  type="text"
-                  value={resetTitle}
-                  placeholder={config.spreadsheetName || 'SheetSync - Personal Tracker'}
-                  onChange={(e) => setResetTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
-                <input type="checkbox" checked={resetConfirmed} onChange={(e) => setResetConfirmed(e.target.checked)} />
-                <span>I understand this device starts with an empty entry list.</span>
-              </label>
+              )}
 
               <button
                 type="button"
                 onClick={handleReset}
-                disabled={!accessToken || !resetConfirmed || isResetting}
+                disabled={!accessToken || (!!config.spreadsheetId && !resetConfirmed) || isResetting}
                 className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:opacity-95 disabled:opacity-40 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
               >
                 {isResetting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                <span>{isResetting ? 'Backing up and resetting…' : 'Back up and reset'}</span>
+                <span>
+                  {isResetting ? 'Working…' : config.spreadsheetId ? 'Back up and reset' : 'Create SheetSync spreadsheet'}
+                </span>
               </button>
               {!accessToken && <p className="text-[11px] text-amber-400">Sign in with Google first.</p>}
             </div>
           )}
 
-          {activeTab === 'create' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-stone-300 mb-1">
-                  Spreadsheet Title
-                </label>
-                <input
-                  type="text"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. SheetSync - Personal Tracker"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                />
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#171926] border border-stone-800 text-xs text-stone-300 space-y-2">
-                <span className="font-bold text-white block">
-                  SheetSync will create these tabs, with the default fields:
-                </span>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  {[...DEFAULT_CATEGORIES.map((c) => ({ name: c.sheetName, color: c.color })),
-                    { name: 'Monthly_Reports', color: '#a8a29e' },
-                    { name: 'App_Config', color: '#a8a29e' },
-                  ].map((t) => (
-                    <span key={t.name} className="flex items-center gap-1.5" style={{ color: t.color }}>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" /> {t.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <p className="text-[11px] text-stone-400">
-                Your tabs on this device go back to these defaults.
-                {config.spreadsheetId && (
-                  <>
-                    {' '}To keep your current tabs and fields, use <span className="font-semibold text-stone-200">Reset Sheet</span> and
-                    choose "Keep the current schema".
-                  </>
-                )}
+          {activeTab === 'backups' && config.spreadsheetId && (
+            <div className="space-y-3">
+              <p className="text-xs text-stone-400">
+                Backups in the <span className="font-mono text-stone-200">backup</span> folder of your Google Drive, newest first.
+                Loading one replaces the contents of {config.spreadsheetName || 'your spreadsheet'}; the current contents are backed up
+                first unless nothing has changed since the last backup.
               </p>
-
-              <button
-                type="button"
-                onClick={handleCreateNew}
-                disabled={isCreating}
-                className="w-full py-3 px-4 rounded-2xl rainbow-bg hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 transition-all active:scale-[0.99]"
-              >
-                {isCreating ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Creating Spreadsheet in Drive...</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Create & Connect Spreadsheet</span>
-                  </>
-                )}
-              </button>
+              {backups === null ? (
+                <div className="py-6 text-center text-xs text-stone-400">{accessToken ? 'Loading backups…' : 'Sign in to see your backups.'}</div>
+              ) : backups.length === 0 ? (
+                <div className="py-6 text-center text-xs text-stone-400">No backups yet. Resetting the sheet creates one.</div>
+              ) : (
+                <ul className="space-y-2">
+                  {backups.map((b) => (
+                    <li key={b.id} className="p-3 rounded-2xl border border-stone-800 bg-stone-900/60 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold text-white truncate">{b.name}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <a
+                            href={`https://docs.google.com/spreadsheets/d/${b.id}/edit`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-stone-400 hover:text-cyan-300"
+                            title="Open in Google Sheets"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmBackupId(confirmBackupId === b.id ? null : b.id)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                          >
+                            Load
+                          </button>
+                        </div>
+                      </div>
+                      {confirmBackupId === b.id && (
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-800">
+                          <span className="text-[11px] text-stone-300">
+                            Replace the spreadsheet with this backup? This device's entry list is cleared.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleLoadBackup(b)}
+                            disabled={loadingBackupId !== null}
+                            className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-extrabold bg-amber-500 text-black disabled:opacity-50"
+                          >
+                            {loadingBackupId === b.id ? 'Loading…' : 'Load backup'}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

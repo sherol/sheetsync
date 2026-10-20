@@ -1,8 +1,8 @@
 import { AppConfig, Entry } from '../types';
-import { SheetsService } from './sheetsService';
+import { SheetsAuthError, SheetsService } from './sheetsService';
 import { INITIAL_CONFIG, SCHEMA_VERSION } from './storageService';
 import { DEFAULT_CATEGORIES } from '../config/categories';
-import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, rowsToEntries } from './syncLogic';
+import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, readChangedFlag, rowsToEntries } from './syncLogic';
 
 export interface SyncContext {
   token: string;
@@ -29,7 +29,7 @@ function isDefaultLayout(config: AppConfig): boolean {
   );
 }
 
-function layoutJson(config: AppConfig): string {
+export function layoutJson(config: AppConfig): string {
   const { schemaVersion, appName, categories, defaultCategoryId, enableHaptics } = config;
   return JSON.stringify({ schemaVersion, appName, categories, defaultCategoryId, enableHaptics });
 }
@@ -57,6 +57,8 @@ export async function syncOnce({
     let tabs = await SheetsService.readTabs(token, sheetId, [...entryTabs(), 'App_Config']);
 
     const backup = parseLayoutBackup(tabs['App_Config'] ?? [], SCHEMA_VERSION);
+    const changed = readChangedFlag(tabs['App_Config'] ?? []) ?? true;
+    if (configRef.current.sheetChanged !== changed) updateConfig((c) => ({ ...c, sheetChanged: changed }));
     const direction = layoutDirection(cfg, backup, isDefaultLayout(cfg));
     if (direction === 'pull' && backup) {
       updateConfig((c) => ({ ...c, ...backup.layout, layoutUpdatedAt: backup.updatedAt, layoutSyncedTo: sheetId }));
@@ -82,7 +84,34 @@ export async function syncOnce({
     pushLayout = cfg.layoutUpdatedAt !== null && cfg.layoutSyncedTo !== sheetId;
   }
 
+  // Rename sheet tabs whose name changed (a new title, or an older two-word name) before
+  // anything is written to them, so their rows stay with the category.
+  // Before SheetSync writes anything, flag the sheet as changed since its last backup.
+  const markChanged = async () => {
+    if (configRef.current.sheetChanged === true) return;
+    await SheetsService.setChangedSinceBackup(token, sheetId, true);
+    updateConfig((c) => ({ ...c, sheetChanged: true }));
+  };
+
+  const renames = configRef.current.categories.filter((c) => c.renameFrom && c.renameFrom !== c.sheetName);
+  if (renames.length > 0) await markChanged();
+  for (const c of renames) {
+    try {
+      await SheetsService.renameTab(token, sheetId, c.renameFrom!, c.sheetName);
+    } catch (err) {
+      if (err instanceof SheetsAuthError) throw err;
+      // A tab with the new name already exists: keep both and write to the new one.
+    }
+  }
+  if (configRef.current.categories.some((c) => c.renameFrom !== undefined)) {
+    updateConfig((cfg) => ({
+      ...cfg,
+      categories: cfg.categories.map(({ renameFrom: _done, ...rest }) => rest),
+    }));
+  }
+
   if (pushLayout) {
+    await markChanged();
     if (!configRef.current.layoutUpdatedAt) {
       const now = new Date().toISOString();
       updateConfig((c) => ({ ...c, layoutUpdatedAt: now }));
@@ -98,6 +127,7 @@ export async function syncOnce({
   for (const category of categories) {
     const batch = pending.filter((e) => e.categoryId === category.id);
     if (batch.length === 0) continue;
+    await markChanged();
     await SheetsService.pushEntries(token, sheetId, category, batch);
     const sent = new Map(batch.map((e) => [e.id, e.timestamp]));
     // An entry edited again while this was sending stays unsent.

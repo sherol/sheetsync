@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Trash2, Search, Check } from 'lucide-react';
 import { CategoryDef } from '../types';
 import { CategoryIcon, ICON_LIBRARY } from './CategoryIcon';
+import { shortLabel, uniqueSheetName } from '../config/categories';
 
 export const COLOR_SWATCHES = [
   '#f43f5e', '#fb923c', '#facc15', '#84cc16', '#10b981', '#14b8a6',
@@ -12,8 +13,7 @@ interface CategorySettingsProps {
   category: CategoryDef;
   onChange: (updated: CategoryDef) => void;
   onRequestDelete: () => void;
-  /** Rename the Google Sheet tab; resolves with a message for the user. */
-  onRenameSheet: (newName: string) => Promise<string>;
+  /** Sheet tab names used by the other tabs, to keep this one unique. */
   takenSheetNames: string[];
 }
 
@@ -23,46 +23,20 @@ const inputClass =
 /** Split a camelCase icon key into searchable words ("handHeart" -> "hand heart"). */
 const words = (key: string) => key.replace(/([a-z])([A-Z0-9])/g, '$1 $2').toLowerCase();
 
-/** The short name shown on tabs and in lists: the first word of the title. */
-export const shortLabel = (title: string) => title.trim().split(/\s+/)[0] || '';
-
-/** Make a valid, readable Google Sheet tab name from free text. */
-export const toSheetName = (text: string) =>
-  text
-    .trim()
-    .replace(/&/g, 'and')
-    .replace(/[\[\]:*?/\\']/g, '')
-    .replace(/\s+/g, '_')
-    .slice(0, 90);
-
 export const CategorySettings: React.FC<CategorySettingsProps> = ({
   category,
   onChange,
   onRequestDelete,
-  onRenameSheet,
   takenSheetNames,
 }) => {
-  const [sheetDraft, setSheetDraft] = useState(category.sheetName);
-  const [sheetBusy, setSheetBusy] = useState(false);
-  const [sheetMsg, setSheetMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const cleanDraft = toSheetName(sheetDraft);
-  const draftTaken = cleanDraft !== category.sheetName && takenSheetNames.includes(cleanDraft);
-  const canRenameSheet = !!cleanDraft && cleanDraft !== category.sheetName && !draftTaken && !sheetBusy;
-
-  const renameSheet = async () => {
-    if (!canRenameSheet) return;
-    setSheetBusy(true);
-    setSheetMsg(null);
-    try {
-      const text = await onRenameSheet(cleanDraft);
-      setSheetDraft(cleanDraft);
-      setSheetMsg({ ok: true, text });
-    } catch (e: any) {
-      setSheetMsg({ ok: false, text: e?.message || 'Rename failed' });
-    } finally {
-      setSheetBusy(false);
-    }
+  // The title's first word names the tab in the app and in Google Sheets. A changed sheet tab name
+  // is remembered in renameFrom, and the tab is renamed in the spreadsheet on the next sync.
+  const setTitle = (title: string) => {
+    const label = shortLabel(title);
+    const original = category.renameFrom ?? category.sheetName;
+    const sheetName = label ? uniqueSheetName(label, takenSheetNames) : category.sheetName;
+    const { renameFrom: _prev, ...rest } = category;
+    onChange({ ...rest, title, label, sheetName, ...(sheetName !== original ? { renameFrom: original } : {}) });
   };
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -100,58 +74,19 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({
               id="category-title"
               type="text"
               value={category.title ?? category.label}
-              onChange={(e) => onChange({ ...category, title: e.target.value, label: shortLabel(e.target.value) })}
+              onChange={(e) => setTitle(e.target.value)}
               onBlur={(e) => {
-                if (!e.target.value.trim()) onChange({ ...category, title: 'Untitled', label: 'Untitled' });
+                if (!e.target.value.trim()) setTitle('Untitled');
               }}
               className={inputClass}
             />
             <p className="text-[10px] text-stone-500 mt-1">
-              Shown as the form heading and under the name on the home screen. Tabs and lists use the first word
-              {category.label ? <> (<span className="text-stone-300">{category.label}</span>)</> : null}.
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="sheet-name" className="block text-[11px] font-medium text-stone-300 mb-1">
-              Google Sheet tab
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="sheet-name"
-                type="text"
-                value={sheetDraft}
-                onChange={(e) => {
-                  setSheetDraft(e.target.value);
-                  setSheetMsg(null);
-                }}
-                className={`${inputClass} font-mono`}
-              />
-              <button
-                type="button"
-                onClick={() => setSheetDraft(toSheetName(category.title || category.label))}
-                className="shrink-0 px-2.5 text-[11px] font-semibold rounded-xl border border-stone-700 text-stone-300 hover:text-white"
-                title="Use the title"
-              >
-                Match title
-              </button>
-              <button
-                type="button"
-                onClick={renameSheet}
-                disabled={!canRenameSheet}
-                className="shrink-0 px-3 text-[11px] font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
-              >
-                {sheetBusy ? 'Renaming…' : 'Rename sheet tab'}
-              </button>
-            </div>
-            <p className={`text-[10px] mt-1 ${sheetMsg ? (sheetMsg.ok ? 'text-emerald-400' : 'text-rose-400') : draftTaken ? 'text-rose-400' : 'text-stone-500'}`}>
-              {sheetMsg
-                ? sheetMsg.text
-                : draftTaken
-                  ? `Another tab already uses "${cleanDraft}".`
-                  : cleanDraft !== sheetDraft.trim() && cleanDraft
-                    ? `Will be saved as "${cleanDraft}".`
-                    : 'Changing the title above does not change this. Use the button to rename the sheet tab too; its rows stay in place.'}
+              The form heading. Tabs, lists and the Google Sheet tab use the first word:{' '}
+              <span className="font-mono text-stone-300">{category.sheetName}</span>
+              {category.renameFrom && category.renameFrom !== category.sheetName && (
+                <> (renamed from <span className="font-mono">{category.renameFrom}</span> on the next sync)</>
+              )}
+              .
             </p>
           </div>
 
