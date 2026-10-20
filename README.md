@@ -49,7 +49,7 @@ The top bar always shows the brown squirrel next to the **SheetSync Rainbow Stud
 
 ## Categories
 
-SheetSync starts with ten categories. Each one is a tab in the app and a tab in your Google Sheet. Tabs have a short name (shown on tabs and in lists) and a full title (shown under the name on the home screen and as the form heading); both are editable in Category Studio.
+SheetSync starts with ten categories. Each one is a tab in the app and a tab in your Google Sheet. Each tab has a title such as "Media & Books"; tabs and lists show its first word ("Media"). Titles are editable in Category Studio.
 
 | Tab · full title | Sheet tab | Fields |
 |---|---|---|
@@ -132,10 +132,9 @@ The studio is where you change what you track. A sidebar lists the categories; s
 ### Tab settings
 
 - **Icon:** tap the large icon square to open the icon library. It has about 100 icons in six groups (Media & Hobbies, Food & Drink, Health & Mood, Work & Ideas, People & Places, Faith & Life) and a search box.
-- **Tab name:** the short name shown on tabs and in lists. Changing it does **not** change the Google Sheet.
-- **Full title:** the longer title shown under the tab name on the home screen and as the form heading.
+- **Title:** for example "Media & Books". It's the form heading and shows under the name on the home screen; tabs and lists use its first word ("Media"). Changing it does **not** change the Google Sheet.
 - **Google Sheet tab:** the spreadsheet tab this category writes to.
-  - **Match name** fills in a sheet-safe version of the tab name; for example, "Books & Films" becomes `Books_and_Films`.
+  - **Match title** fills in a sheet-safe version of the title; for example, "Books & Films" becomes `Books_and_Films`.
   - **Rename sheet tab** applies it. If you're signed in and the sheet has a tab with the old name, that tab is renamed in the spreadsheet and keeps all its rows. Otherwise the app switches to the new name and creates that tab on the next save.
   - Names already used by another tab aren't allowed.
 - **Colour:** pick one of 12 swatches, or any custom colour.

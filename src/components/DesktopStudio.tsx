@@ -84,7 +84,8 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     const stamp = Date.now();
     const created: CategoryDef = {
       id: `c_${stamp}`,
-      label: n === 1 ? 'New Tab' : `New Tab ${n}`,
+      label: 'New',
+      title: n === 1 ? 'New Tab' : `New Tab ${n}`,
       sheetName: n === 1 ? 'New_Tab' : `New_Tab_${n}`,
       icon: 'star',
       color: COLOR_SWATCHES[config.categories.length % COLOR_SWATCHES.length],

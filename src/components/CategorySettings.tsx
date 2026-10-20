@@ -23,6 +23,9 @@ const inputClass =
 /** Split a camelCase icon key into searchable words ("handHeart" -> "hand heart"). */
 const words = (key: string) => key.replace(/([a-z])([A-Z0-9])/g, '$1 $2').toLowerCase();
 
+/** The short name shown on tabs and in lists: the first word of the title. */
+export const shortLabel = (title: string) => title.trim().split(/\s+/)[0] || '';
+
 /** Make a valid, readable Google Sheet tab name from free text. */
 export const toSheetName = (text: string) =>
   text
@@ -90,34 +93,23 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({
 
         <div className="flex-1 space-y-3 min-w-0">
           <div>
-            <label htmlFor="category-name" className="block text-[11px] font-medium text-stone-300 mb-1">
-              Tab name
-            </label>
-            <input
-              id="category-name"
-              type="text"
-              value={category.label}
-              onChange={(e) => onChange({ ...category, label: e.target.value })}
-              onBlur={(e) => {
-                if (!e.target.value.trim()) onChange({ ...category, label: 'Untitled' });
-              }}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
             <label htmlFor="category-title" className="block text-[11px] font-medium text-stone-300 mb-1">
-              Full title
+              Title
             </label>
             <input
               id="category-title"
               type="text"
-              value={category.title ?? ''}
-              placeholder={category.label}
-              onChange={(e) => onChange({ ...category, title: e.target.value })}
+              value={category.title ?? category.label}
+              onChange={(e) => onChange({ ...category, title: e.target.value, label: shortLabel(e.target.value) })}
+              onBlur={(e) => {
+                if (!e.target.value.trim()) onChange({ ...category, title: 'Untitled', label: 'Untitled' });
+              }}
               className={inputClass}
             />
-            <p className="text-[10px] text-stone-500 mt-1">Shown under the tab name on the home screen and as the form heading.</p>
+            <p className="text-[10px] text-stone-500 mt-1">
+              Shown as the form heading and under the name on the home screen. Tabs and lists use the first word
+              {category.label ? <> (<span className="text-stone-300">{category.label}</span>)</> : null}.
+            </p>
           </div>
 
           <div>
@@ -137,11 +129,11 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({
               />
               <button
                 type="button"
-                onClick={() => setSheetDraft(toSheetName(category.label))}
+                onClick={() => setSheetDraft(toSheetName(category.title || category.label))}
                 className="shrink-0 px-2.5 text-[11px] font-semibold rounded-xl border border-stone-700 text-stone-300 hover:text-white"
-                title="Use the tab name"
+                title="Use the title"
               >
-                Match name
+                Match title
               </button>
               <button
                 type="button"
@@ -159,7 +151,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({
                   ? `Another tab already uses "${cleanDraft}".`
                   : cleanDraft !== sheetDraft.trim() && cleanDraft
                     ? `Will be saved as "${cleanDraft}".`
-                    : 'Renaming the app tab above does not change this. Use the button to rename the sheet tab too; its rows stay in place.'}
+                    : 'Changing the title above does not change this. Use the button to rename the sheet tab too; its rows stay in place.'}
             </p>
           </div>
 
