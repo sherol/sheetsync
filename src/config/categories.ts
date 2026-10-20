@@ -1,4 +1,6 @@
-import { CategoryDef } from '../types';
+import { CategoryDef, ListDef } from '../types';
+
+export const DEFAULT_LISTS: ListDef[] = [{ id: 'projects', label: 'Projects', items: [], fromCategoryId: 'projects' }];
 import { BIBLE_BOOKS } from './bible';
 
 const SCALE_1_10 = { min: 1, max: 10 };
@@ -30,6 +32,8 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     color: '#fb923c',
     titleFieldId: 'item',
     dateFieldId: 'date',
+    quickPicksEnabled: true,
+    quickPicks: [],
     fields: [
       { id: 'date', label: 'Date', type: 'date', required: true, showInQuickLog: true },
       { id: 'time', label: 'Time', type: 'time', showInQuickLog: true },
@@ -122,7 +126,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
       { id: 'name', label: 'Name', type: 'text', required: true, showInQuickLog: true },
       { id: 'lastContact', label: 'Last Contact', type: 'date', showInQuickLog: true },
       { id: 'todos', label: 'To-dos', type: 'notes', showInQuickLog: true },
-      { id: 'projects', label: 'Associated Projects', type: 'relation', relatedCategoryId: 'projects', showInQuickLog: true },
+      { id: 'projects', label: 'Associated Projects', type: 'list', listId: 'projects', multiple: true, showInQuickLog: true },
     ],
   },
   {
@@ -158,7 +162,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
       { id: 'type', label: 'Type', type: 'text', showInQuickLog: true },
       { id: 'date', label: 'Date', type: 'date', showInQuickLog: true },
       { id: 'idea', label: 'Idea', type: 'notes', showInQuickLog: true },
-      { id: 'projects', label: 'Related Projects', type: 'relation', relatedCategoryId: 'projects', showInQuickLog: true },
+      { id: 'projects', label: 'Related Projects', type: 'list', listId: 'projects', multiple: true, showInQuickLog: true },
       { id: 'links', label: 'Links', type: 'links', showInQuickLog: true },
     ],
   },

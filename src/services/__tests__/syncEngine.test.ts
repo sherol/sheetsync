@@ -261,4 +261,20 @@ describe('syncOnce', () => {
     const writesToConfig = fetchMock.mock.calls.filter(([u, init]) => (init as RequestInit)?.method && decodeURIComponent(String(u)).includes('App_Config'));
     expect(writesToConfig).toHaveLength(0);
   });
+
+  it('shares lists (e.g. Projects) and quick picks through the layout backup', async () => {
+    const { tabs } = fakeSheets({});
+    const lists = [{ id: 'projects', label: 'Projects', items: ['SheetSync', 'Garden'], fromCategoryId: 'projects' }];
+    const cats = DEFAULT_CATEGORIES.map((c) =>
+      c.id === 'food' ? { ...c, quickPicks: [{ id: 'q1', label: 'Vitamin D · 1000 IU', values: { item: 'Vitamin D' } }] } : c
+    );
+    const laptop = device({ lists, categories: cats, layoutUpdatedAt: '2026-10-19T00:00:00.000Z' });
+    await laptop.run(true, false);
+
+    const ipad = device();
+    fakeSheets({ App_Config: tabs.get('App_Config')! });
+    await ipad.run(true, false);
+    expect(ipad.configRef.current.lists[0].items).toEqual(['SheetSync', 'Garden']);
+    expect(ipad.configRef.current.categories.find((c) => c.id === 'food')!.quickPicks![0].label).toBe('Vitamin D · 1000 IU');
+  });
 });

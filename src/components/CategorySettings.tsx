@@ -90,6 +90,18 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({
             </p>
           </div>
 
+          <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!category.quickPicksEnabled}
+              onChange={(e) => onChange({ ...category, quickPicksEnabled: e.target.checked, quickPicks: category.quickPicks ?? [] })}
+            />
+            <span>
+              Quick picks on this tab's form
+              {(category.quickPicks?.length ?? 0) > 0 && <span className="text-stone-500"> ({category.quickPicks!.length} saved)</span>}
+            </span>
+          </label>
+
           <div>
             <span className="block text-[11px] font-medium text-stone-300 mb-1">Colour</span>
             <div className="flex flex-wrap items-center gap-1.5">

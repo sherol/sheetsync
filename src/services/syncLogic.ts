@@ -171,7 +171,7 @@ export function mergeEntries(
 }
 
 export interface LayoutBackup {
-  layout: Pick<AppConfig, 'categories' | 'defaultCategoryId'> & Partial<Pick<AppConfig, 'appName' | 'enableHaptics'>>;
+  layout: Pick<AppConfig, 'categories' | 'defaultCategoryId'> & Partial<Pick<AppConfig, 'appName' | 'enableHaptics' | 'lists'>>;
   updatedAt: string;
 }
 
@@ -184,7 +184,7 @@ export function parseLayoutBackup(rows: string[][], schemaVersion: number): Layo
       const parsed = JSON.parse(row[1]);
       // Backups from older schemas (v2, v3) are upgraded.
       const version = parsed?.schemaVersion;
-      if (![2, 3, 4, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
+      if (![2, 3, 4, 5, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
       const updatedAt = row[2] ?? '';
       if (best && timeOf(updatedAt) <= timeOf(best.updatedAt)) continue;
       best = {
@@ -193,6 +193,7 @@ export function parseLayoutBackup(rows: string[][], schemaVersion: number): Layo
           defaultCategoryId: parsed.defaultCategoryId,
           ...(typeof parsed.appName === 'string' ? { appName: parsed.appName } : {}),
           ...(typeof parsed.enableHaptics === 'boolean' ? { enableHaptics: parsed.enableHaptics } : {}),
+          ...(Array.isArray(parsed.lists) ? { lists: parsed.lists } : {}),
         },
         updatedAt,
       };

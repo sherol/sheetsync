@@ -7,7 +7,8 @@ export type FieldType =
   | 'date'
   | 'time'
   | 'links'
-  | 'relation';
+  | 'relation'
+  | 'list';
 
 export interface CustomField {
   id: string;
@@ -19,6 +20,8 @@ export interface CustomField {
   min?: number; // for rating
   max?: number; // for rating
   relatedCategoryId?: string; // for relation: pick entries from this category by their title field
+  listId?: string; // for list: the shared list (AppConfig.lists) to pick from
+  multiple?: boolean; // for list: allow several picks, stored comma-separated
   required?: boolean;
   showInQuickLog?: boolean;
 }
@@ -29,6 +32,13 @@ export type CategoryIcon = string;
 export interface BibleTrackerDef {
   bookFieldId: string; // select field whose options are Bible book names
   chaptersFieldId: string; // text field such as "1-3, 5"
+}
+
+/** A saved set of field values, one tap to fill a form (e.g. "Vitamin D · 1000 IU"). */
+export interface QuickPick {
+  id: string;
+  label: string;
+  values: Record<string, any>;
 }
 
 export interface CategoryDef {
@@ -42,6 +52,8 @@ export interface CategoryDef {
   titleFieldId?: string; // field that names an entry in lists and relation pickers
   dateFieldId?: string; // field that dates an entry for sorting and monthly reports
   bibleTracker?: BibleTrackerDef; // show Bible study progress for this category
+  quickPicksEnabled?: boolean; // show quick-pick buttons on this tab's form
+  quickPicks?: QuickPick[];
   fields: CustomField[];
 }
 
@@ -53,10 +65,20 @@ export interface Entry {
   syncedTo?: string; // spreadsheet ID this version was written to; unset = not sent yet
 }
 
+/** A named list of choices shared by fields (e.g. Projects), editable from the app and synced with the layout. */
+export interface ListDef {
+  id: string;
+  label: string;
+  items: string[];
+  /** Entries saved in this category add their title to the list. */
+  fromCategoryId?: string;
+}
+
 export interface AppConfig {
   schemaVersion: number;
   appName: string;
   categories: CategoryDef[];
+  lists: ListDef[];
   defaultCategoryId: string;
   enableHaptics: boolean;
   spreadsheetId: string | null;

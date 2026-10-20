@@ -9,7 +9,7 @@ import { initAuth, googleSignIn, logout } from './services/auth';
 import { StorageService, INITIAL_CONFIG, SCHEMA_VERSION } from './services/storageService';
 import { DEFAULT_CATEGORIES } from './config/categories';
 import { SheetsService } from './services/sheetsService';
-import { AppConfig, Entry, CategoryDef, CustomField } from './types';
+import { AppConfig, Entry, CategoryDef, CustomField, QuickPick } from './types';
 import { useSheetSync } from './hooks/useSheetSync';
 import { isUnsent, parseLayoutBackup } from './services/syncLogic';
 import { layoutJson } from './services/syncEngine';
@@ -133,7 +133,9 @@ export default function App() {
   const handleUpdateConfig = (newConfig: AppConfig) => {
     updateConfig((prev) => {
       const layoutChanged =
-        newConfig.categories !== prev.categories || newConfig.defaultCategoryId !== prev.defaultCategoryId;
+        newConfig.categories !== prev.categories ||
+        newConfig.lists !== prev.lists ||
+        newConfig.defaultCategoryId !== prev.defaultCategoryId;
       // Sync bookkeeping always comes from the latest config, not the caller's copy.
       const synced = { lastSyncedAt: prev.lastSyncedAt, layoutUpdatedAt: prev.layoutUpdatedAt, layoutSyncedTo: prev.layoutSyncedTo };
       return layoutChanged
@@ -211,7 +213,7 @@ export default function App() {
     const categories = (keepLayout ? current.categories : DEFAULT_CATEGORIES).map(({ renameFrom: _old, ...c }) => c);
     const layout: Partial<AppConfig> = keepLayout
       ? { categories }
-      : { categories, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId };
+      : { categories, lists: INITIAL_CONFIG.lists, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId };
 
     if (!current.spreadsheetId) {
       const created = await SheetsService.createMasterSpreadsheet(token, categories, 'SheetSync');
@@ -286,8 +288,52 @@ export default function App() {
     };
 
     updateEntries((list) => (existingId ? list.map((e) => (e.id === existingId ? entry : e)) : [entry, ...list]));
+    // Saving a project (or anything a shared list follows) adds its title to that list.
+    const title = String((category.titleFieldId && values[category.titleFieldId]) ?? '').trim();
+    if (title) {
+      const lists = configRef.current.lists.map((l) =>
+        l.fromCategoryId === categoryId && !l.items.some((i) => i.toLowerCase() === title.toLowerCase())
+          ? { ...l, items: [...l.items, title] }
+          : l
+      );
+      if (lists.some((l, i) => l !== configRef.current.lists[i])) handleUpdateConfig({ ...configRef.current, lists });
+    }
     void runSync(false);
   };
+
+  // Save a tab's quick-pick buttons (synced with the layout)
+  const handleUpdateQuickPicks = (categoryId: string, quickPicks: QuickPick[]) => {
+    handleUpdateConfig({
+      ...configRef.current,
+      categories: configRef.current.categories.map((c) => (c.id === categoryId ? { ...c, quickPicks } : c)),
+    });
+  };
+
+  // Edit a shared list (e.g. Projects) from a form's dropdown
+  const handleUpdateList = (listId: string, items: string[]) => {
+    handleUpdateConfig({
+      ...configRef.current,
+      lists: configRef.current.lists.map((l) => (l.id === listId ? { ...l, items } : l)),
+    });
+  };
+
+  // Seed shared lists from entries already on this device (e.g. projects logged before lists existed).
+  useEffect(() => {
+    const cfg = configRef.current;
+    const lists = cfg.lists.map((l) => {
+      const source = cfg.categories.find((c) => c.id === l.fromCategoryId);
+      if (!source?.titleFieldId) return l;
+      const names = entriesRef.current
+        .filter((e) => e.categoryId === source.id)
+        .map((e) => String(e.values[source.titleFieldId!] ?? '').trim())
+        .filter(Boolean);
+      const missing = [...new Set(names)].filter((n) => !l.items.some((i) => i.toLowerCase() === n.toLowerCase()));
+      return missing.length ? { ...l, items: [...l.items, ...missing] } : l;
+    });
+    if (lists.some((l, i) => l !== cfg.lists[i])) handleUpdateConfig({ ...cfg, lists });
+    // Once per load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Save a monthly report row
   const handleSyncMonthlyReport = async (row: (string | number)[]) => {
@@ -419,6 +465,8 @@ export default function App() {
                         config={config}
                         entries={entries}
                         onSaveEntry={handleSaveEntry}
+              onUpdateList={handleUpdateList}
+              onUpdateQuickPicks={handleUpdateQuickPicks}
                         isSyncing={syncStatus.state === 'syncing'}
                         isInDesktopFrame={true}
                       />
@@ -439,6 +487,8 @@ export default function App() {
               config={config}
               entries={entries}
               onSaveEntry={handleSaveEntry}
+              onUpdateList={handleUpdateList}
+              onUpdateQuickPicks={handleUpdateQuickPicks}
               isSyncing={syncStatus.state === 'syncing'}
               isInDesktopFrame={false}
             />

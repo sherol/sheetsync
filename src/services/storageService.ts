@@ -1,12 +1,13 @@
 import { AppConfig, Entry } from '../types';
-import { DEFAULT_CATEGORIES } from '../config/categories';
+import { DEFAULT_CATEGORIES, DEFAULT_LISTS } from '../config/categories';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const INITIAL_CONFIG: AppConfig = {
   schemaVersion: SCHEMA_VERSION,
   appName: 'SheetSync',
   categories: DEFAULT_CATEGORIES,
+  lists: DEFAULT_LISTS,
   defaultCategoryId: 'mood',
   enableHaptics: true,
   spreadsheetId: null,
@@ -50,6 +51,8 @@ const STORAGE_KEYS = {
  *   the first word (Medicine, ...); the old tab is renamed in the spreadsheet on the next sync.
  * - v4 -> v5: Media's default title becomes "Media & Music" and its Type choices gain "Album";
  *   Projects' default title becomes "Projects & Practice" (only where still the old defaults).
+ * - v5 -> v6: People's and Prototypes' project pickers become dropdowns from the shared Projects list;
+ *   Medicine & Food gets quick-pick buttons.
  * Renamed tabs and fields are kept.
  */
 export function upgradeCategories(categories: any[], fromVersion: number): any[] {
@@ -63,6 +66,19 @@ export function upgradeCategories(categories: any[], fromVersion: number): any[]
     }
     if (fromVersion <= 3 && V3_SHEET_NAMES[c.id] && c.sheetName === V3_SHEET_NAMES[c.id]) {
       next = { ...next, sheetName: def.sheetName, renameFrom: next.renameFrom ?? c.sheetName };
+    }
+    if (fromVersion <= 5 && c.id === 'food' && next.quickPicksEnabled === undefined) {
+      next = { ...next, quickPicksEnabled: true, quickPicks: next.quickPicks ?? [] };
+    }
+    if (fromVersion <= 5 && (c.id === 'people' || c.id === 'ideas')) {
+      next = {
+        ...next,
+        fields: (next.fields || []).map((f: any) =>
+          f.type === 'relation' && f.relatedCategoryId === 'projects'
+            ? (({ relatedCategoryId: _r, ...rest }) => ({ ...rest, type: 'list', listId: 'projects', multiple: true }))(f)
+            : f
+        ),
+      };
     }
     if (fromVersion <= 4 && c.id === 'projects' && next.title === 'Projects & Initiatives') {
       next = { ...next, title: def.title };
@@ -91,7 +107,7 @@ export class StorageService {
         if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.categories)) {
           return { ...INITIAL_CONFIG, ...parsed };
         }
-        if ([2, 3, 4].includes(parsed.schemaVersion) && Array.isArray(parsed.categories)) {
+        if ([2, 3, 4, 5].includes(parsed.schemaVersion) && Array.isArray(parsed.categories)) {
           const categories = upgradeCategories(parsed.categories, parsed.schemaVersion);
           return { ...INITIAL_CONFIG, ...parsed, categories, schemaVersion: SCHEMA_VERSION };
         }

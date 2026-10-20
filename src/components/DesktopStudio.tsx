@@ -25,6 +25,7 @@ const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   time: 'Time',
   links: 'Links',
   relation: 'Link to another category',
+  list: 'Dropdown from a shared list',
 };
 
 const inputClass =
@@ -49,6 +50,9 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   const [newRelated, setNewRelated] = useState('');
   const [newRequired, setNewRequired] = useState(false);
   const [newQuickLog, setNewQuickLog] = useState(true);
+  const [newListId, setNewListId] = useState('');
+  const [newListName, setNewListName] = useState('');
+  const [newMultiple, setNewMultiple] = useState(true);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
   const category =
@@ -119,6 +123,9 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     setNewRelated('');
     setNewRequired(false);
     setNewQuickLog(true);
+    setNewListId('');
+    setNewListName('');
+    setNewMultiple(true);
     setIsAddingField(false);
     setEditingFieldId(null);
   };
@@ -142,6 +149,9 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     setNewRelated(field.relatedCategoryId ?? '');
     setNewRequired(!!field.required);
     setNewQuickLog(field.showInQuickLog !== false);
+    setNewListId(field.listId ?? '');
+    setNewListName('');
+    setNewMultiple(field.multiple !== false);
   };
 
   // Add a field, or save changes to the one being edited. An edited field keeps its ID, so values
@@ -171,11 +181,29 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
       if (!newRelated) return;
       field.relatedCategoryId = newRelated;
     }
+    let lists = config.lists;
+    if (newType === 'list') {
+      if (newListId === '__new') {
+        const name = newListName.trim();
+        if (!name) return;
+        const id = `l_${Date.now()}`;
+        lists = [...lists, { id, label: name, items: [] }];
+        field.listId = id;
+      } else {
+        if (!newListId) return;
+        field.listId = newListId;
+      }
+      field.multiple = newMultiple;
+    }
 
     const fields = editingOriginal
       ? category.fields.map((f) => (f.id === editingOriginal.id ? field : f))
       : [...category.fields, field];
-    updateCategory({ ...category, fields });
+    onUpdateConfig({
+      ...config,
+      lists,
+      categories: config.categories.map((c) => (c.id === category.id ? { ...category, fields } : c)),
+    });
     resetForm();
   };
 
@@ -188,6 +216,11 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     if (field.type === 'relation') {
       const rel = config.categories.find((c) => c.id === field.relatedCategoryId);
       return rel ? `Picks from ${rel.label}` : 'Linked category missing';
+    }
+    if (field.type === 'list') {
+      const list = config.lists.find((l) => l.id === field.listId);
+      if (!list) return 'List missing';
+      return `${list.label} (${list.items.length} item${list.items.length === 1 ? '' : 's'})${field.multiple ? ', several allowed' : ''}`;
     }
     if (field.unit) return `Unit: ${field.unit}`;
     return '';
@@ -294,6 +327,43 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                             </option>
                           ))}
                       </select>
+                    </div>
+                  )}
+
+                  {newType === 'list' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Shared list *</label>
+                        <select required value={newListId} onChange={(e) => setNewListId(e.target.value)} className={inputClass}>
+                          <option value="">Choose a list</option>
+                          {config.lists.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.label} ({l.items.length})
+                            </option>
+                          ))}
+                          <option value="__new">New list…</option>
+                        </select>
+                      </div>
+                      {newListId === '__new' && (
+                        <div>
+                          <label className="block text-[11px] font-medium text-stone-300 mb-1">New list name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newListName}
+                            onChange={(e) => setNewListName(e.target.value)}
+                            placeholder="e.g. Places"
+                            className={inputClass}
+                          />
+                        </div>
+                      )}
+                      <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer sm:col-span-2">
+                        <input type="checkbox" checked={newMultiple} onChange={(e) => setNewMultiple(e.target.checked)} />
+                        <span>Allow several picks</span>
+                      </label>
+                      <p className="text-[11px] text-stone-500 sm:col-span-2">
+                        The list's items are edited from the form in the app (“Edit list”) and shared by every field that uses it.
+                      </p>
                     </div>
                   )}
 

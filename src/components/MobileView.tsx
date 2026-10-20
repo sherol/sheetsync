@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Send, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, X, ExternalLink, AlertCircle } from 'lucide-react';
-import { AppConfig, CategoryDef, Entry } from '../types';
+import { AppConfig, CategoryDef, Entry, QuickPick } from '../types';
 import { SquirrelIcon } from './SquirrelIcon';
 import { CategoryIcon } from './CategoryIcon';
 import { FieldInput } from './FieldInput';
 import { BibleProgress } from './BibleProgress';
+import { QuickPicks } from './QuickPicks';
 import { categoryTitle, entryDate, entryTitle, ratingColor, splitLinks } from '../config/categories';
 
 interface MobileViewProps {
   config: AppConfig;
   entries: Entry[];
   onSaveEntry: (categoryId: string, values: Record<string, any>, existingId?: string) => Promise<void>;
+  onUpdateList: (listId: string, items: string[]) => void;
+  onUpdateQuickPicks: (categoryId: string, picks: QuickPick[]) => void;
   isSyncing: boolean;
   isInDesktopFrame?: boolean;
 }
@@ -35,6 +38,8 @@ export const MobileView: React.FC<MobileViewProps> = ({
   config,
   entries,
   onSaveEntry,
+  onUpdateList,
+  onUpdateQuickPicks,
   isSyncing,
   isInDesktopFrame = false,
 }) => {
@@ -222,6 +227,15 @@ export const MobileView: React.FC<MobileViewProps> = ({
               )}
             </div>
 
+            {category.quickPicksEnabled && (
+              <QuickPicks
+                category={category}
+                values={values}
+                onApply={(picked) => setValues((prev) => ({ ...prev, ...picked }))}
+                onUpdate={(picks) => onUpdateQuickPicks(category.id, picks)}
+              />
+            )}
+
             {quickFields.map((f) => (
               <FieldInput
                 key={f.id}
@@ -231,6 +245,8 @@ export const MobileView: React.FC<MobileViewProps> = ({
                 accent={category.color}
                 categories={categories}
                 entries={entries}
+                lists={config.lists}
+                onUpdateList={onUpdateList}
               />
             ))}
 
@@ -255,6 +271,8 @@ export const MobileView: React.FC<MobileViewProps> = ({
                         accent={category.color}
                         categories={categories}
                         entries={entries}
+                        lists={config.lists}
+                        onUpdateList={onUpdateList}
                       />
                     ))}
                   </div>

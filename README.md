@@ -60,9 +60,9 @@ SheetSync starts with ten categories. Each one is a tab in the app and a tab in 
 | **Mood** · Mood & Feelings | `Mood` | Date, Mood Score 1–10, Daily Recap |
 | **Meals** · Meals & Recipes | `Meals` | Name, Type, Ingredients, Directions, Last Cooked, Links |
 | **Projects** · Projects & Practice | `Projects` | Name, Type, Date, About, Links |
-| **People** · People & Friends | `People` | Name, Last Contact, To-dos, Associated Projects |
+| **People** · People & Friends | `People` | Name, Last Contact, To-dos, Associated Projects (from the Projects list) |
 | **Presentations** · Presentations & Writings | `Presentations` | Title, About, Where, When, Who Was There, Slides, Links |
-| **Prototypes** · Prototypes & Ideas | `Prototypes` | Name, Type, Date, Idea, Related Projects, Links |
+| **Prototypes** · Prototypes & Ideas | `Prototypes` | Name, Type, Date, Idea, Related Projects (from the Projects list), Links |
 | **Prayer** · Prayer & Theology | `Prayer` | Date, Prayer, Book Studied, Chapters, Study Notes, Answered (Waiting / Answered) |
 
 You can rename, recolour, reorder, add and delete categories and their fields in [Category Studio](#category-studio).
@@ -77,6 +77,23 @@ The app opens on a **home list** of every category, top to bottom. Each row show
 - **More fields:** fields set to "More fields" in the studio sit behind a **N more fields** toggle below the main form.
 - **Edit:** tap the pencil on a recent entry to load it into the form, change it, then tap **Update entry**. In Google Sheets, an edit overwrites that entry's existing row instead of adding a new one, so you can keep records such as a person's "Last Contact" or a recipe's "Last Cooked" current.
 - **Recent entries:** shows up to 10 entries, newest first, with their choices, coloured ratings and clickable links.
+
+### Quick picks
+
+Medicine & Food has **quick picks**: one-tap buttons for things you log often, such as "Vitamin D · 1000 IU".
+- **Adding one:** fill in the item and anything you repeat (type, amount), then tap **Save "…" as quick pick**.
+- **Using one:** tap it to fill in the type, item and amount. The date, time, ratings and notes stay as they are for this entry.
+- **Edit** reorders or removes them.
+
+Quick picks are saved with your tab setup, so every device has the same ones. Turn them on for other tabs in Category Studio ("Quick picks on this tab's form").
+
+### Projects list
+
+People's **Associated Projects** and Prototypes' **Related Projects** are dropdowns from one shared **Projects** list:
+- Pick a project to add it as a chip; tap ✕ on a chip to remove it.
+- **Edit projects** opens the list right in the form: add, rename (tap a name), reorder or remove. Removing a project from the list doesn't change entries that already use it.
+- Saving an entry in the Projects tab adds its name to the list. Projects already logged on a device are added the first time it opens this version.
+- The list is saved with your tab setup, so it's the same on every device.
 
 <p>
   <img src="docs/screenshots/mood.png" alt="Mood form with the 1 to 10 scale" width="240">
@@ -95,7 +112,8 @@ The app opens on a **home list** of every category, top to bottom. Each row show
 | Date | A date picker | `YYYY-MM-DD` |
 | Time | A time picker | `HH:MM` |
 | Links | One link per line; shown as clickable links in recent entries | Text |
-| Link to another category | Tap-to-pick buttons of entries in another category (e.g. People → Projects), plus a text box for anything else | Comma-separated names |
+| Dropdown from a shared list | A dropdown of a list's items (e.g. Projects), with **Edit list** to change the list; optionally several picks shown as chips | Text (comma-separated when several) |
+| Link to another category | Tap-to-pick buttons of entries in another category, plus a text box for anything else | Comma-separated names |
 
 ## Bible study tracker
 
@@ -149,6 +167,7 @@ The studio is where you change what you track. A sidebar lists the categories; s
   - Choice: its options.
   - Number: a unit.
   - Rating scale: lowest and highest values.
+  - Dropdown from a shared list: which list (or a new one), and whether several picks are allowed.
   - Link to another category: which category to pick from.
 - **Edit** (pencil icon) opens a field in the same form, so you can change its name, type, choices, unit, scale, linked category, Required and Main form. The field keeps its identity, so entries already logged stay with it, and its sheet column header updates on the next save. The Prayer tab's Book Studied and Chapters fields keep their types because the Bible tracker reads them.
 - **↑ / ↓** reorder fields, which is also their column order in the sheet.

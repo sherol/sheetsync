@@ -1,7 +1,7 @@
 import { AppConfig, Entry } from '../types';
 import { SheetsAuthError, SheetsService } from './sheetsService';
 import { INITIAL_CONFIG, SCHEMA_VERSION } from './storageService';
-import { DEFAULT_CATEGORIES } from '../config/categories';
+import { DEFAULT_CATEGORIES, DEFAULT_LISTS } from '../config/categories';
 import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, readChangedFlag, rowsToEntries } from './syncLogic';
 
 export interface SyncContext {
@@ -25,13 +25,14 @@ export interface SyncContext {
 function isDefaultLayout(config: AppConfig): boolean {
   return (
     config.defaultCategoryId === INITIAL_CONFIG.defaultCategoryId &&
-    JSON.stringify(config.categories) === JSON.stringify(DEFAULT_CATEGORIES)
+    JSON.stringify(config.categories) === JSON.stringify(DEFAULT_CATEGORIES) &&
+    JSON.stringify(config.lists) === JSON.stringify(DEFAULT_LISTS)
   );
 }
 
 export function layoutJson(config: AppConfig): string {
-  const { schemaVersion, appName, categories, defaultCategoryId, enableHaptics } = config;
-  return JSON.stringify({ schemaVersion, appName, categories, defaultCategoryId, enableHaptics });
+  const { schemaVersion, appName, categories, lists, defaultCategoryId, enableHaptics } = config;
+  return JSON.stringify({ schemaVersion, appName, categories, lists, defaultCategoryId, enableHaptics });
 }
 
 /**

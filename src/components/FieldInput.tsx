@@ -1,5 +1,6 @@
 import React from 'react';
-import { CustomField, Entry, CategoryDef } from '../types';
+import { CustomField, Entry, CategoryDef, ListDef } from '../types';
+import { ListPicker } from './ListPicker';
 import { ratingColor, entryTitle, splitList } from '../config/categories';
 
 interface FieldInputProps {
@@ -9,12 +10,14 @@ interface FieldInputProps {
   accent: string;
   categories: CategoryDef[];
   entries: Entry[];
+  lists: ListDef[];
+  onUpdateList: (listId: string, items: string[]) => void;
 }
 
 const inputClass =
   'w-full px-3 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-white focus:outline-none focus:ring-2 focus:ring-stone-500';
 
-export const FieldInput: React.FC<FieldInputProps> = ({ field, value, onChange, accent, categories, entries }) => {
+export const FieldInput: React.FC<FieldInputProps> = ({ field, value, onChange, accent, categories, entries, lists, onUpdateList }) => {
   const label = (
     <label htmlFor={`field-${field.id}`} className="block text-xs font-bold text-stone-200 mb-1.5">
       {field.label}
@@ -123,6 +126,18 @@ export const FieldInput: React.FC<FieldInputProps> = ({ field, value, onChange, 
             })}
           </div>
         </div>
+      );
+
+    case 'list':
+      return (
+        <ListPicker
+          field={field}
+          list={lists.find((l) => l.id === field.listId)}
+          value={value}
+          onChange={onChange}
+          accent={accent}
+          onUpdateList={onUpdateList}
+        />
       );
 
     case 'relation': {

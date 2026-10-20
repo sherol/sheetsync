@@ -177,3 +177,30 @@ describe('upgradeCategories v4 -> v5', () => {
     expect(media.fields.find((f: any) => f.id === 'type').options).toEqual(['Podcast']);
   });
 });
+
+describe('upgradeCategories v5 -> v6', () => {
+  it('turns project pickers into shared-list dropdowns and gives Medicine quick picks', () => {
+    const v5 = DEFAULT_CATEGORIES.map((c) => {
+      if (c.id === 'people' || c.id === 'ideas') {
+        return {
+          ...c,
+          fields: c.fields.map((f) =>
+            f.id === 'projects' ? { id: 'projects', label: f.label, type: 'relation', relatedCategoryId: 'projects' } : f
+          ),
+        };
+      }
+      if (c.id === 'food') {
+        const { quickPicksEnabled: _q, quickPicks: _p, ...rest } = c;
+        return rest;
+      }
+      return c;
+    });
+    const out = upgradeCategories(v5 as any[], 5);
+    for (const id of ['people', 'ideas']) {
+      const f = out.find((c) => c.id === id).fields.find((x: any) => x.id === 'projects');
+      expect(f).toMatchObject({ type: 'list', listId: 'projects', multiple: true });
+      expect(f.relatedCategoryId).toBeUndefined();
+    }
+    expect(out.find((c) => c.id === 'food')).toMatchObject({ quickPicksEnabled: true, quickPicks: [] });
+  });
+});
