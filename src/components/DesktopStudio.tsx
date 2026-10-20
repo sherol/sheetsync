@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Settings2, Eye, EyeOff, Sparkles, Save, Database, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, Settings2, Eye, EyeOff, Sparkles, Save, Database, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
 import { AppConfig, CategoryDef, CustomField, FieldType } from '../types';
 import { CategoryIcon } from './CategoryIcon';
 import { CategorySettings, COLOR_SWATCHES } from './CategorySettings';
@@ -49,6 +49,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   const [newRelated, setNewRelated] = useState('');
   const [newRequired, setNewRequired] = useState(false);
   const [newQuickLog, setNewQuickLog] = useState(true);
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
   const category =
     config.categories.find((c) => c.id === activeTab) ??
@@ -119,18 +120,43 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     setNewRequired(false);
     setNewQuickLog(true);
     setIsAddingField(false);
+    setEditingFieldId(null);
   };
 
-  const handleAddField = (e: React.FormEvent) => {
+  const editingOriginal = category?.fields.find((f) => f.id === editingFieldId);
+  // The Bible tracker reads its book and chapters fields by type, so those keep theirs.
+  const typeLocked =
+    !!editingOriginal &&
+    !!category?.bibleTracker &&
+    [category.bibleTracker.bookFieldId, category.bibleTracker.chaptersFieldId].includes(editingOriginal.id);
+
+  const startEditField = (field: CustomField) => {
+    setIsAddingField(false);
+    setEditingFieldId(field.id);
+    setNewLabel(field.label);
+    setNewType(field.type);
+    setNewUnit(field.unit ?? '');
+    setNewOptions((field.options ?? []).join(', '));
+    setNewMin(field.min ?? 1);
+    setNewMax(field.max ?? 10);
+    setNewRelated(field.relatedCategoryId ?? '');
+    setNewRequired(!!field.required);
+    setNewQuickLog(field.showInQuickLog !== false);
+  };
+
+  // Add a field, or save changes to the one being edited. An edited field keeps its ID, so values
+  // already logged stay with it (and with its sheet column).
+  const handleSubmitField = (e: React.FormEvent) => {
     e.preventDefault();
     if (!category || !newLabel.trim()) return;
 
     const field: CustomField = {
-      id: `f_${Date.now()}`,
+      id: editingOriginal?.id ?? `f_${Date.now()}`,
       label: newLabel.trim(),
       type: newType,
       required: newRequired,
       showInQuickLog: newQuickLog,
+      ...(editingOriginal?.placeholder ? { placeholder: editingOriginal.placeholder } : {}),
     };
     if (newType === 'number' && newUnit.trim()) field.unit = newUnit.trim();
     if (newType === 'select') {
@@ -146,7 +172,10 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
       field.relatedCategoryId = newRelated;
     }
 
-    updateCategory({ ...category, fields: [...category.fields, field] });
+    const fields = editingOriginal
+      ? category.fields.map((f) => (f.id === editingOriginal.id ? field : f))
+      : [...category.fields, field];
+    updateCategory({ ...category, fields });
     resetForm();
   };
 
@@ -162,6 +191,130 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     }
     if (field.unit) return `Unit: ${field.unit}`;
     return '';
+  };
+
+  const renderFieldForm = () => {
+    if (!category) return null;
+    return (
+      <form
+                  onSubmit={handleSubmitField}
+                  className="p-4 rounded-2xl border border-purple-500/30 bg-[#161926] space-y-3 shadow-xl"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-stone-800">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      {editingFieldId ? `Edit field: ${editingOriginal?.label ?? ''}` : `New field for ${category.label}`}
+                    </span>
+                    <button type="button" onClick={resetForm} className="text-stone-400 hover:text-stone-200 text-xs">
+                      Cancel
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Field label *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newLabel}
+                        onChange={(e) => setNewLabel(e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Input type</label>
+                      <select
+                        value={newType}
+                        onChange={(e) => setNewType(e.target.value as FieldType)}
+                        disabled={typeLocked}
+                        className={`${inputClass} disabled:opacity-50`}
+                      >
+                        {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => (
+                          <option key={t} value={t}>
+                            {FIELD_TYPE_LABELS[t]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {newType === 'select' && (
+                    <div>
+                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Choices (comma-separated) *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newOptions}
+                        onChange={(e) => setNewOptions(e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                  )}
+
+                  {newType === 'number' && (
+                    <div className="max-w-xs">
+                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Unit (optional)</label>
+                      <input type="text" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} className={inputClass} />
+                    </div>
+                  )}
+
+                  {newType === 'rating' && (
+                    <div className="grid grid-cols-2 gap-3 max-w-xs">
+                      <div>
+                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Lowest (green)</label>
+                        <input
+                          type="number"
+                          value={newMin}
+                          onChange={(e) => setNewMin(parseInt(e.target.value) || 0)}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Highest (red)</label>
+                        <input
+                          type="number"
+                          value={newMax}
+                          onChange={(e) => setNewMax(parseInt(e.target.value) || 0)}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {newType === 'relation' && (
+                    <div className="max-w-xs">
+                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Pick entries from *</label>
+                      <select required value={newRelated} onChange={(e) => setNewRelated(e.target.value)} className={inputClass}>
+                        <option value="">Choose a category</option>
+                        {config.categories
+                          .filter((c) => c.id !== category.id)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                      <input type="checkbox" checked={newQuickLog} onChange={(e) => setNewQuickLog(e.target.checked)} />
+                      <span>Show on main form</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                      <input type="checkbox" checked={newRequired} onChange={(e) => setNewRequired(e.target.checked)} />
+                      <span>Required</span>
+                    </label>
+                    <button
+                      type="submit"
+                      className="ml-auto px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-95 text-white text-xs font-bold shadow-md"
+                    >
+                      {editingFieldId ? 'Save Field' : 'Add Field'}
+                    </button>
+                  </div>
+                </form>
+    );
   };
 
   return (
@@ -253,7 +406,11 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
               <div className="flex items-center justify-between gap-3 pt-1">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400">Fields</h3>
                 <button
-                  onClick={() => setIsAddingField(!isAddingField)}
+                  onClick={() => {
+                    const opening = !isAddingField;
+                    resetForm();
+                    setIsAddingField(opening);
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all text-white"
                   style={{ backgroundColor: `${category.color}22`, borderColor: `${category.color}66` }}
                 >
@@ -262,124 +419,13 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                 </button>
               </div>
 
-              {isAddingField && (
-                <form
-                  onSubmit={handleAddField}
-                  className="p-4 rounded-2xl border border-purple-500/30 bg-[#161926] space-y-3 shadow-xl"
-                >
-                  <div className="flex items-center justify-between pb-2 border-b border-stone-800">
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      New field for {category.label}
-                    </span>
-                    <button type="button" onClick={resetForm} className="text-stone-400 hover:text-stone-200 text-xs">
-                      Cancel
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Field label *</label>
-                      <input
-                        type="text"
-                        required
-                        value={newLabel}
-                        onChange={(e) => setNewLabel(e.target.value)}
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Input type</label>
-                      <select value={newType} onChange={(e) => setNewType(e.target.value as FieldType)} className={inputClass}>
-                        {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => (
-                          <option key={t} value={t}>
-                            {FIELD_TYPE_LABELS[t]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {newType === 'select' && (
-                    <div>
-                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Choices (comma-separated) *</label>
-                      <input
-                        type="text"
-                        required
-                        value={newOptions}
-                        onChange={(e) => setNewOptions(e.target.value)}
-                        className={inputClass}
-                      />
-                    </div>
-                  )}
-
-                  {newType === 'number' && (
-                    <div className="max-w-xs">
-                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Unit (optional)</label>
-                      <input type="text" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} className={inputClass} />
-                    </div>
-                  )}
-
-                  {newType === 'rating' && (
-                    <div className="grid grid-cols-2 gap-3 max-w-xs">
-                      <div>
-                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Lowest (green)</label>
-                        <input
-                          type="number"
-                          value={newMin}
-                          onChange={(e) => setNewMin(parseInt(e.target.value) || 0)}
-                          className={inputClass}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-stone-300 mb-1">Highest (red)</label>
-                        <input
-                          type="number"
-                          value={newMax}
-                          onChange={(e) => setNewMax(parseInt(e.target.value) || 0)}
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {newType === 'relation' && (
-                    <div className="max-w-xs">
-                      <label className="block text-[11px] font-medium text-stone-300 mb-1">Pick entries from *</label>
-                      <select required value={newRelated} onChange={(e) => setNewRelated(e.target.value)} className={inputClass}>
-                        <option value="">Choose a category</option>
-                        {config.categories
-                          .filter((c) => c.id !== category.id)
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.label}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-4 pt-1">
-                    <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
-                      <input type="checkbox" checked={newQuickLog} onChange={(e) => setNewQuickLog(e.target.checked)} />
-                      <span>Show on main form</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
-                      <input type="checkbox" checked={newRequired} onChange={(e) => setNewRequired(e.target.checked)} />
-                      <span>Required</span>
-                    </label>
-                    <button
-                      type="submit"
-                      className="ml-auto px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-95 text-white text-xs font-bold shadow-md"
-                    >
-                      Add Field
-                    </button>
-                  </div>
-                </form>
-              )}
+              {isAddingField && renderFieldForm()}
 
               <div className="space-y-2">
-                {category.fields.map((field, idx) => (
+                {category.fields.map((field, idx) =>
+                  editingFieldId === field.id ? (
+                    <div key={field.id}>{renderFieldForm()}</div>
+                  ) : (
                   <div
                     key={field.id}
                     className="p-3.5 rounded-2xl border border-stone-800 hover:border-stone-700 bg-[#141620] flex items-center justify-between gap-3 transition-colors"
@@ -416,6 +462,14 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                         title="Move down"
                       >
                         <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => startEditField(field)}
+                        className="p-1.5 text-stone-500 hover:text-stone-200 rounded-lg"
+                        title="Edit field"
+                        aria-label={`Edit ${field.label}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => toggleQuickLog(category, field.id)}

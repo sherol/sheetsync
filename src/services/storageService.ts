@@ -1,7 +1,7 @@
 import { AppConfig, Entry } from '../types';
 import { DEFAULT_CATEGORIES } from '../config/categories';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const INITIAL_CONFIG: AppConfig = {
   schemaVersion: SCHEMA_VERSION,
@@ -48,6 +48,8 @@ const STORAGE_KEYS = {
  * - v2 -> v3: built-in tabs still using their original names get the short label + full title.
  * - v3 -> v4: built-in sheet tabs still using their old two-word names (Medicine_Food, ...) get
  *   the first word (Medicine, ...); the old tab is renamed in the spreadsheet on the next sync.
+ * - v4 -> v5: Media's default title becomes "Media & Music" and its Type choices gain "Album";
+ *   Projects' default title becomes "Projects & Practice" (only where still the old defaults).
  * Renamed tabs and fields are kept.
  */
 export function upgradeCategories(categories: any[], fromVersion: number): any[] {
@@ -62,6 +64,20 @@ export function upgradeCategories(categories: any[], fromVersion: number): any[]
     if (fromVersion <= 3 && V3_SHEET_NAMES[c.id] && c.sheetName === V3_SHEET_NAMES[c.id]) {
       next = { ...next, sheetName: def.sheetName, renameFrom: next.renameFrom ?? c.sheetName };
     }
+    if (fromVersion <= 4 && c.id === 'projects' && next.title === 'Projects & Initiatives') {
+      next = { ...next, title: def.title };
+    }
+    if (fromVersion <= 4 && c.id === 'media') {
+      if (next.title === 'Media & Books') next = { ...next, title: def.title };
+      next = {
+        ...next,
+        fields: (next.fields || []).map((f: any) =>
+          f.id === 'type' && f.type === 'select' && JSON.stringify(f.options) === JSON.stringify(['Book', 'Movie', 'TV', 'Game'])
+            ? { ...f, options: [...f.options, 'Album'] }
+            : f
+        ),
+      };
+    }
     return next;
   });
 }
@@ -75,7 +91,7 @@ export class StorageService {
         if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.categories)) {
           return { ...INITIAL_CONFIG, ...parsed };
         }
-        if ((parsed.schemaVersion === 2 || parsed.schemaVersion === 3) && Array.isArray(parsed.categories)) {
+        if ([2, 3, 4].includes(parsed.schemaVersion) && Array.isArray(parsed.categories)) {
           const categories = upgradeCategories(parsed.categories, parsed.schemaVersion);
           return { ...INITIAL_CONFIG, ...parsed, categories, schemaVersion: SCHEMA_VERSION };
         }

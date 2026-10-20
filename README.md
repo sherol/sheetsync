@@ -50,16 +50,16 @@ The top bar always shows the brown squirrel next to the **SheetSync Rainbow Stud
 
 ## Categories
 
-SheetSync starts with ten categories. Each one is a tab in the app and a tab in your Google Sheet. Each tab has a title such as "Media & Books"; tabs and lists show its first word ("Media"). Titles are editable in Category Studio.
+SheetSync starts with ten categories. Each one is a tab in the app and a tab in your Google Sheet. Each tab has a title such as "Media & Music"; tabs and lists show its first word ("Media"). Titles are editable in Category Studio.
 
 | Tab · full title | Sheet tab | Fields |
 |---|---|---|
-| **Media** · Media & Books | `Media` | Title, Type (Book / Movie / TV / Game), Date Consumed, Review, Links |
+| **Media** · Media & Music | `Media` | Title, Type (Book / Movie / TV / Game / Album), Date Consumed, Review, Links |
 | **Medicine** · Medicine & Food | `Medicine` | Date, Time, Type (Med / Snack / Meal / Drink), Food / Drink / Activity, Amount, How do I feel?, Hunger Level 1–10, Burning Level 1–10, Stress 1–10 |
 | **Memories** · Memories & Milestones | `Memories` | Date, Location, Who Was There, What Happened, Results |
 | **Mood** · Mood & Feelings | `Mood` | Date, Mood Score 1–10, Daily Recap |
 | **Meals** · Meals & Recipes | `Meals` | Name, Type, Ingredients, Directions, Last Cooked, Links |
-| **Projects** · Projects & Initiatives | `Projects` | Name, Type, Date, About, Links |
+| **Projects** · Projects & Practice | `Projects` | Name, Type, Date, About, Links |
 | **People** · People & Friends | `People` | Name, Last Contact, To-dos, Associated Projects |
 | **Presentations** · Presentations & Writings | `Presentations` | Title, About, Where, When, Who Was There, Slides, Links |
 | **Prototypes** · Prototypes & Ideas | `Prototypes` | Name, Type, Date, Idea, Related Projects, Links |
@@ -133,7 +133,7 @@ The studio is where you change what you track. A sidebar lists the categories; s
 ### Tab settings
 
 - **Icon:** tap the large icon square to open the icon library. It has about 100 icons in six groups (Media & Hobbies, Food & Drink, Health & Mood, Work & Ideas, People & Places, Faith & Life) and a search box.
-- **Title:** for example "Media & Books". It's the form heading and shows under the name on the home screen. Its first word ("Media") names the tab in the app **and** the tab in your Google Sheet.
+- **Title:** for example "Media & Music". It's the form heading and shows under the name on the home screen. Its first word ("Media") names the tab in the app **and** the tab in your Google Sheet.
   - Change the title and the sheet tab is renamed in the spreadsheet on the next sync, keeping all its rows. The studio shows "renamed from … on the next sync" until then.
   - If two tabs would get the same first word, the second sheet tab gets a number (`New`, `New_2`).
 - **Colour:** pick one of 12 swatches, or any custom colour.
@@ -150,6 +150,7 @@ The studio is where you change what you track. A sidebar lists the categories; s
   - Number: a unit.
   - Rating scale: lowest and highest values.
   - Link to another category: which category to pick from.
+- **Edit** (pencil icon) opens a field in the same form, so you can change its name, type, choices, unit, scale, linked category, Required and Main form. The field keeps its identity, so entries already logged stay with it, and its sheet column header updates on the next save. The Prayer tab's Book Studied and Chapters fields keep their types because the Bible tracker reads them.
 - **↑ / ↓** reorder fields, which is also their column order in the sheet.
 - **Main form / More fields** chooses whether a field shows immediately or behind the "more fields" toggle.
 - **Delete** (bin icon) removes a field after you confirm.

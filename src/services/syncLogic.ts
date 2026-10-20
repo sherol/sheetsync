@@ -184,7 +184,7 @@ export function parseLayoutBackup(rows: string[][], schemaVersion: number): Layo
       const parsed = JSON.parse(row[1]);
       // Backups from older schemas (v2, v3) are upgraded.
       const version = parsed?.schemaVersion;
-      if (![2, 3, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
+      if (![2, 3, 4, schemaVersion].includes(version) || !Array.isArray(parsed.categories)) continue;
       const updatedAt = row[2] ?? '';
       if (best && timeOf(updatedAt) <= timeOf(best.updatedAt)) continue;
       best = {

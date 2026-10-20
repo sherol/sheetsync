@@ -228,7 +228,7 @@ describe('syncOnce', () => {
     await d.run(true, false);
 
     const cats = d.configRef.current.categories;
-    expect(cats.find((c) => c.id === 'media')).toMatchObject({ label: 'Media', title: 'Media & Books' });
+    expect(cats.find((c) => c.id === 'media')).toMatchObject({ label: 'Media', title: 'Media & Music' });
     expect(cats.find((c) => c.id === 'mood')).toMatchObject({ label: 'My Mood' });
   });
 

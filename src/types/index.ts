@@ -34,7 +34,7 @@ export interface BibleTrackerDef {
 export interface CategoryDef {
   id: string;
   label: string; // short name used on tabs and in lists
-  title?: string; // full title, e.g. "Media & Books"
+  title?: string; // full title, e.g. "Media & Music"
   sheetName: string; // Google Sheet tab name: the first word of the title
   renameFrom?: string; // previous sheet tab name, renamed in the spreadsheet on the next sync
   icon: CategoryIcon;

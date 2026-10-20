@@ -144,3 +144,36 @@ describe('upgradeCategories v3 -> v4', () => {
     expect(out.find((c) => c.id === 'recipes').renameFrom).toBeUndefined();
   });
 });
+
+describe('upgradeCategories v4 -> v5', () => {
+  it('renames the default Media title and adds Album to its untouched Type choices', () => {
+    const v4 = DEFAULT_CATEGORIES.map((c) =>
+      c.id === 'media'
+        ? {
+            ...c,
+            title: 'Media & Books',
+            fields: c.fields.map((f) => (f.id === 'type' ? { ...f, options: ['Book', 'Movie', 'TV', 'Game'] } : f)),
+          }
+        : c
+    );
+    const media = upgradeCategories(v4, 4).find((c) => c.id === 'media');
+    expect(media.title).toBe('Media & Music');
+    expect(media.fields.find((f: any) => f.id === 'type').options).toEqual(['Book', 'Movie', 'TV', 'Game', 'Album']);
+  });
+
+  it('renames the default Projects title', () => {
+    const v4 = DEFAULT_CATEGORIES.map((c) => (c.id === 'projects' ? { ...c, title: 'Projects & Initiatives' } : c));
+    expect(upgradeCategories(v4, 4).find((c) => c.id === 'projects').title).toBe('Projects & Practice');
+  });
+
+  it('leaves a custom Media title and custom choices alone', () => {
+    const v4 = DEFAULT_CATEGORIES.map((c) =>
+      c.id === 'media'
+        ? { ...c, title: 'Media & Podcasts', fields: c.fields.map((f) => (f.id === 'type' ? { ...f, options: ['Podcast'] } : f)) }
+        : c
+    );
+    const media = upgradeCategories(v4, 4).find((c) => c.id === 'media');
+    expect(media.title).toBe('Media & Podcasts');
+    expect(media.fields.find((f: any) => f.id === 'type').options).toEqual(['Podcast']);
+  });
+});

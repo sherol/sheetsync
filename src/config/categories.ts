@@ -7,7 +7,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'media',
     label: 'Media',
-    title: 'Media & Books',
+    title: 'Media & Music',
     sheetName: 'Media',
     icon: 'film',
     color: '#f43f5e',
@@ -15,7 +15,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
     dateFieldId: 'date',
     fields: [
       { id: 'title', label: 'Title', type: 'text', required: true, showInQuickLog: true },
-      { id: 'type', label: 'Type', type: 'select', options: ['Book', 'Movie', 'TV', 'Game'], required: true, showInQuickLog: true },
+      { id: 'type', label: 'Type', type: 'select', options: ['Book', 'Movie', 'TV', 'Game', 'Album'], required: true, showInQuickLog: true },
       { id: 'date', label: 'Date Consumed', type: 'date', showInQuickLog: true },
       { id: 'review', label: 'Review', type: 'notes', showInQuickLog: true },
       { id: 'links', label: 'Links', type: 'links', showInQuickLog: true },
@@ -95,7 +95,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
     id: 'projects',
     label: 'Projects',
-    title: 'Projects & Initiatives',
+    title: 'Projects & Practice',
     sheetName: 'Projects',
     icon: 'folder',
     color: '#06b6d4',
