@@ -154,6 +154,31 @@ export default function App() {
   };
 
   // Reset: copy the connected sheet into Drive's backup/ folder, then start and connect a new one
+  /**
+   * Create a spreadsheet and connect it. Without a layout to keep, the device goes back to the
+   * default tabs and fields. The chosen layout is backed up to the new sheet on the next sync.
+   */
+  const startNewSpreadsheet = async (token: string, title: string, keepLayout: boolean) => {
+    const categories = keepLayout ? configRef.current.categories : DEFAULT_CATEGORIES;
+    const created = await SheetsService.createMasterSpreadsheet(token, categories, title);
+    updateConfig((c) => ({
+      ...c,
+      ...(keepLayout ? {} : { categories: DEFAULT_CATEGORIES, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId }),
+      spreadsheetId: created.id,
+      spreadsheetName: created.name,
+      layoutUpdatedAt: new Date().toISOString(),
+      layoutSyncedTo: null,
+      lastSyncedAt: null,
+    }));
+    return created;
+  };
+
+  // "Create New Sheet": a new spreadsheet with the default tabs and fields
+  const handleCreateSpreadsheet = async (title: string): Promise<{ id: string; name: string }> => {
+    if (!accessToken) throw new Error('Please sign in with Google first to create a spreadsheet.');
+    return startNewSpreadsheet(accessToken, title, false);
+  };
+
   const handleResetSpreadsheet = async ({ keepLayout, title }: { keepLayout: boolean; title: string }): Promise<string> => {
     const token = accessToken;
     const old = configRef.current;
@@ -165,20 +190,8 @@ export default function App() {
       old.spreadsheetId,
       `${old.spreadsheetName || 'SheetSync'} (backup ${stamp})`
     );
-    const categories = keepLayout ? old.categories : DEFAULT_CATEGORIES;
-    const created = await SheetsService.createMasterSpreadsheet(token, categories, title);
-
     updateEntries(() => []);
-    updateConfig((c) => ({
-      ...c,
-      ...(keepLayout ? {} : { categories: DEFAULT_CATEGORIES, defaultCategoryId: INITIAL_CONFIG.defaultCategoryId }),
-      spreadsheetId: created.id,
-      spreadsheetName: created.name,
-      // Back the chosen layout up to the new sheet's App_Config on the next sync.
-      layoutUpdatedAt: new Date().toISOString(),
-      layoutSyncedTo: null,
-      lastSyncedAt: null,
-    }));
+    const created = await startNewSpreadsheet(token, title, keepLayout);
     return `Backed up to "backup/${backup.name}" in Google Drive and connected the new spreadsheet "${created.name}". On your other devices, connect "${created.name}" with "Choose from Drive".`;
   };
 
@@ -411,6 +424,7 @@ export default function App() {
         config={config}
         onUpdateSpreadsheet={handleUpdateSpreadsheet}
         onResetSpreadsheet={handleResetSpreadsheet}
+        onCreateSpreadsheet={handleCreateSpreadsheet}
         entryCount={entries.length}
         accessToken={accessToken}
         onLoginClick={handleLogin}

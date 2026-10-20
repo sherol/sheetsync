@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { SheetsService } from '../services/sheetsService';
 import { AppConfig } from '../types';
+import { DEFAULT_CATEGORIES } from '../config/categories';
 
 interface SpreadsheetModalProps {
   isOpen: boolean;
@@ -22,6 +23,8 @@ interface SpreadsheetModalProps {
   onLoginClick: () => void;
   /** Back up the connected sheet into Drive's backup/ folder and start a new one. Resolves with a summary. */
   onResetSpreadsheet: (opts: { keepLayout: boolean; title: string }) => Promise<string>;
+  /** Create and connect a spreadsheet with the default tabs and fields. */
+  onCreateSpreadsheet: (title: string) => Promise<{ id: string; name: string }>;
   entryCount: number;
 }
 
@@ -33,6 +36,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
   accessToken,
   onLoginClick,
   onResetSpreadsheet,
+  onCreateSpreadsheet,
   entryCount,
 }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'drive' | 'manual' | 'reset'>('create');
@@ -93,8 +97,7 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
     setIsCreating(true);
     setStatusMessage(null);
     try {
-      const res = await SheetsService.createMasterSpreadsheet(accessToken, config.categories, newTitle || 'SheetSync - Personal Tracker');
-      onUpdateSpreadsheet(res.id, res.name);
+      const res = await onCreateSpreadsheet(newTitle || 'SheetSync - Personal Tracker');
       setStatusMessage({ type: 'success', text: `Created and linked "${res.name}"!` });
       setTimeout(() => {
         onClose();
@@ -380,10 +383,10 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
 
               <div className="p-4 rounded-2xl bg-[#171926] border border-stone-800 text-xs text-stone-300 space-y-2">
                 <span className="font-bold text-white block">
-                  SheetSync will automatically initialize:
+                  SheetSync will create these tabs, with the default fields:
                 </span>
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  {[...config.categories.map((c) => ({ name: c.sheetName, color: c.color })),
+                  {[...DEFAULT_CATEGORIES.map((c) => ({ name: c.sheetName, color: c.color })),
                     { name: 'Monthly_Reports', color: '#a8a29e' },
                     { name: 'App_Config', color: '#a8a29e' },
                   ].map((t) => (
@@ -393,6 +396,16 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              <p className="text-[11px] text-stone-400">
+                Your tabs on this device go back to these defaults.
+                {config.spreadsheetId && (
+                  <>
+                    {' '}To keep your current tabs and fields, use <span className="font-semibold text-stone-200">Reset Sheet</span> and
+                    choose "Keep the current schema".
+                  </>
+                )}
+              </p>
 
               <button
                 type="button"

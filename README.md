@@ -31,7 +31,7 @@ The screenshots use example data.
 1. Open the app. On a phone or tablet it opens in **Mobile / iPad App** view; on a wide screen it opens in **Category Studio**.
 2. Select **Connect Google** and sign in. SheetSync asks for permission to edit spreadsheets it creates or opens.
 3. Select the spreadsheet status under the SheetSync name in the top bar to open the spreadsheet dialog, then do one of these:
-   - **Create** a new spreadsheet. SheetSync adds one tab per category plus `Monthly_Reports` and `App_Config`.
+   - **Create** a new spreadsheet. It starts with the default ten tabs and fields (your tabs on that device go back to the defaults), plus `Monthly_Reports` and `App_Config`.
    - **Pick** an existing spreadsheet from your Drive, or **paste** its URL or ID. SheetSync adds any missing tabs and leaves existing tabs alone.
 4. Start logging. Entries also save on the device, so the app works before you connect a sheet; anything logged offline is sent once you connect.
 
