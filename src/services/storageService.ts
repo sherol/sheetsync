@@ -35,6 +35,20 @@ const STORAGE_KEYS = {
   ENTRIES: 'sheetsync_entries',
 };
 
+/**
+ * Bring categories saved under an older schema up to date. v2 -> v3: built-in
+ * tabs still using their original names get the short label + full title;
+ * renamed tabs, fields and sheet tabs are kept.
+ */
+export function upgradeCategories(categories: any[], fromVersion: number): any[] {
+  if (fromVersion >= SCHEMA_VERSION) return categories;
+  return categories.map((c: any) => {
+    const def = DEFAULT_CATEGORIES.find((d) => d.id === c.id);
+    if (!def || c.title || c.label !== V2_LABELS[c.id]) return c;
+    return { ...c, label: def.label, title: def.title };
+  });
+}
+
 export class StorageService {
   static getConfig(): AppConfig {
     try {
@@ -45,13 +59,7 @@ export class StorageService {
           return { ...INITIAL_CONFIG, ...parsed };
         }
         if (parsed.schemaVersion === 2 && Array.isArray(parsed.categories)) {
-          // v2 -> v3: built-in tabs still using their original names get the new
-          // short label + full title. Renamed tabs, fields and sheet tabs are kept.
-          const categories = parsed.categories.map((c: any) => {
-            const def = DEFAULT_CATEGORIES.find((d) => d.id === c.id);
-            if (!def || c.title || c.label !== V2_LABELS[c.id]) return c;
-            return { ...c, label: def.label, title: def.title };
-          });
+          const categories = upgradeCategories(parsed.categories, 2);
           return { ...INITIAL_CONFIG, ...parsed, categories, schemaVersion: SCHEMA_VERSION };
         }
         // Config from the old life/health/prayer/habits layout: start from the new

@@ -58,7 +58,7 @@ export default function App() {
     StorageService.saveEntries(next);
   }, []);
 
-  // Two-way sync with the Google Sheet
+  // Sync with the Google Sheet: shared layout + sending unsent entries
   const { status: sync, sync: runSync } = useSheetSync({ accessToken, configRef, updateConfig, entriesRef, updateEntries });
   const pendingCount = entries.filter((e) => isUnsent(e, config.spreadsheetId)).length;
   const syncStatus = { ...sync, pendingCount };

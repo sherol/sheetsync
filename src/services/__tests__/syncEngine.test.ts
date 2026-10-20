@@ -69,11 +69,12 @@ function device(config: Partial<AppConfig> = {}, entries: Entry[] = []) {
   return {
     configRef,
     entriesRef,
-    run: (pull = true) =>
+    run: (pull = true, readEntries = true) =>
       syncOnce({
         token: 't',
         sheetId: SHEET,
         pull,
+        readEntries,
         configRef,
         updateConfig: (fn) => (configRef.current = fn(configRef.current)),
         entriesRef,
@@ -172,5 +173,41 @@ describe('syncOnce', () => {
 
     fakeSheets({}, { status: 401 });
     await expect(device({}, [prayer('p', '2026-10-19T00:00:00.000Z', '1')]).run()).rejects.toBeInstanceOf(SheetsAuthError);
+  });
+
+  it('by default restores only the layout, not entries, and still sends unsent entries', async () => {
+    const custom = DEFAULT_CATEGORIES.map((c) => (c.id === 'mood' ? { ...c, label: 'Feelings' } : c));
+    const layout = JSON.stringify({ ...INITIAL_CONFIG, categories: custom });
+    const { tabs, fetchMock } = fakeSheets({
+      App_Config: [['Key', 'JSON Value', 'Last Updated'], ['schema_config', layout, '2026-10-01T00:00:00.000Z']],
+      Mood: [
+        ['ID', 'Saved At', 'Date', 'Mood Score', 'Daily Recap'],
+        ['mood_1', '2026-10-18T20:00:00.000Z', '10/18/2026', '7', 'Good day'],
+      ],
+    });
+    const d = device({}, [prayer('prayer_1', '2026-10-19T08:00:00.000Z', '4-6')]);
+    await d.run(true, false);
+
+    expect(d.configRef.current.categories.find((c) => c.id === 'mood')!.label).toBe('Feelings');
+    expect(d.entriesRef.current.map((e) => e.id)).toEqual(['prayer_1']);
+    expect(d.entriesRef.current[0].syncedTo).toBe(SHEET);
+    expect(tabs.get('Prayer')![1]).toContain('4-6');
+    expect(tabs.get('Mood')!.length).toBe(2);
+    const reads = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u))).filter((u) => u.includes('batchGet'));
+    expect(reads.every((u) => !u.includes("'Mood'"))).toBe(true);
+  });
+
+  it('upgrades a layout backup saved before short tab names', async () => {
+    const v2 = DEFAULT_CATEGORIES.map((c) =>
+      c.id === 'media' ? { ...c, label: 'Media', title: undefined } : c.id === 'mood' ? { ...c, label: 'My Mood', title: undefined } : c
+    );
+    const layout = JSON.stringify({ schemaVersion: 2, categories: v2, defaultCategoryId: 'mood' });
+    fakeSheets({ App_Config: [['Key', 'JSON Value', 'Last Updated'], ['schema_config', layout, '2026-10-01T00:00:00.000Z']] });
+    const d = device();
+    await d.run(true, false);
+
+    const cats = d.configRef.current.categories;
+    expect(cats.find((c) => c.id === 'media')).toMatchObject({ label: 'Media', title: 'Media & Books' });
+    expect(cats.find((c) => c.id === 'mood')).toMatchObject({ label: 'My Mood' });
   });
 });

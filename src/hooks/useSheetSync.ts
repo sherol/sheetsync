@@ -16,8 +16,8 @@ interface Options {
 }
 
 /**
- * Two-way sync with the connected Google Sheet.
- * - sync(true) reads every category tab and the layout backup, merges them into the
+ * Sync with the connected Google Sheet.
+ * - sync(true) reads the layout backup (and category tabs only if readEntries is on), merges them into the
  *   device (newer Saved At wins), then sends everything not yet in the sheet.
  * - sync(false) only sends what's unsent.
  * Runs one at a time; a request made while syncing runs once the current one finishes.

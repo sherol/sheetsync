@@ -164,15 +164,12 @@ Your setup is backed up to the `App_Config` tab automatically a couple of second
 
 ## How data is stored and synced
 
-SheetSync keeps a copy on the device and syncs it with your Google Sheet both ways.
+SheetSync keeps a copy on the device, sends every entry to your Google Sheet, and shares the category setup between devices through the sheet.
 
 - **On the device:** entries and settings are saved in the browser's local storage, so the app works offline and before you connect.
 - **Sending:** every save is sent to the category's tab when you're connected. Anything saved while offline or signed out is kept as **unsent**. The badge next to the sheet name shows how many entries haven't been sent yet. They're sent automatically when you connect, when the network comes back, or when you tap the badge.
-- **Loading:** when you connect, and when you come back to the app after a minute or more, SheetSync reads every tab and merges it into the device:
-  - Entries that are only in the sheet are added, so a new phone, a cleared browser, or rows added by another app (such as mdlife) show up.
-  - If an entry was changed in both places, the version with the newer **Saved At** wins.
-  - Your category setup is restored from the `App_Config` backup on a device that hasn't changed its own setup. Otherwise the newer setup wins.
-  - Nothing on the device is deleted by loading. An entry missing from the sheet is sent again.
+- **Shared setup:** your tabs, fields, icons, colours and home order are kept in the `App_Config` tab. When you connect, and when you come back to the app after a minute or more, SheetSync reads only that tab: a device that hasn't changed its own setup takes the sheet's, otherwise the newer setup wins. Change a tab on your laptop and the iPad shows the same tabs next time.
+- **Entries aren't loaded back:** SheetSync doesn't read your entries from the sheet. Each device's recent-entries list shows what was logged on that device; the sheet holds everything from every device.
 - **In the sheet:** each row has **ID**, **Saved At**, then one column per field in the studio's order.
   - Rows are matched by ID, so editing an entry updates its row.
   - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.
@@ -200,7 +197,7 @@ npm run build    # production build in dist/
 | `src/config/categories.ts` | The default categories, the rating colour scale, entry title/date helpers |
 | `src/config/bible.ts` | The 66 books with chapter counts, chapter parsing, progress maths |
 | `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs, write rows, rename tabs, reports |
-| `src/services/syncEngine.ts`, `syncLogic.ts` | Two-way sync: reading tabs, merging by ID and Saved At, sending unsent entries and the layout backup |
+| `src/services/syncEngine.ts`, `syncLogic.ts` | Sync: the shared layout in `App_Config`, sending unsent entries in batches (reading entries back is available behind the `readEntries` option, off by default) |
 | `src/hooks/useSheetSync.ts` | When sync runs: on connect, after saves and layout edits, on return to the app, when back online |
 | `src/services/storageService.ts` | Local storage, and migration from older saved settings |
 | `src/services/auth.ts` | Google sign-in through Firebase Auth; the token is kept for the tab until it expires |
