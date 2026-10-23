@@ -6,7 +6,7 @@ import {
   cellToValue,
   isUnsent,
   layoutDirection,
-  mergeEntries,
+  mergePage,
   parseLayoutBackup,
   rowsToEntries,
   valueToCell,
@@ -59,12 +59,10 @@ describe('rowsToEntries', () => {
   });
 });
 
-describe('mergeEntries', () => {
-  const pulled = new Set(['food']);
-
+describe('mergePage', () => {
   it('adds entries that are only in the sheet', () => {
     const remote = [entry('a', '2026-10-01T00:00:00Z', { syncedTo: SHEET })];
-    expect(mergeEntries([], remote, pulled, SHEET)).toEqual(remote);
+    expect(mergePage([], remote)).toEqual(remote);
   });
 
   it('keeps the newer copy when both sides have an entry', () => {
@@ -73,7 +71,7 @@ describe('mergeEntries', () => {
       { ...entry('a', '2026-10-02T00:00:00Z', { syncedTo: SHEET }), values: { item: 'edited in sheet' } },
       { ...entry('b', '2026-10-03T00:00:00Z', { syncedTo: SHEET }), values: { item: 'older' } },
     ];
-    const merged = mergeEntries(local, remote, pulled, SHEET);
+    const merged = mergePage(local, remote);
     expect(merged.find((e) => e.id === 'a')!.values.item).toBe('edited in sheet');
     const b = merged.find((e) => e.id === 'b')!;
     expect(b.values.item).toBe('b');
@@ -83,31 +81,20 @@ describe('mergeEntries', () => {
   it('takes hand edits made in the sheet without a new Saved At', () => {
     const local = [entry('a', '2026-10-01T00:00:00Z', { syncedTo: SHEET })];
     const remote = [{ ...entry('a', '2026-10-01T00:00:00.000Z', { syncedTo: SHEET }), values: { item: 'fixed typo' } }];
-    const merged = mergeEntries(local, remote, pulled, SHEET);
+    const merged = mergePage(local, remote);
     expect(merged[0].values.item).toBe('fixed typo');
     expect(isUnsent(merged[0], SHEET)).toBe(false);
   });
 
   it('sends entries from before two-way sync once, even if the sheet has the same Saved At', () => {
     const remote = [{ ...entry('a', '2026-10-01T00:00:00.000Z', { syncedTo: SHEET }), values: { item: '1/3/2026' } }];
-    const merged = mergeEntries([entry('a', '2026-10-01T00:00:00Z')], remote, pulled, SHEET);
+    const merged = mergePage([entry('a', '2026-10-01T00:00:00Z')], remote);
     expect(merged[0].values.item).toBe('a');
     expect(isUnsent(merged[0], SHEET)).toBe(true);
   });
 
-  it('never drops a device entry missing from the sheet; it is sent again', () => {
-    const merged = mergeEntries([entry('a', '2026-10-01T00:00:00Z', { syncedTo: SHEET })], [], pulled, SHEET);
-    expect(merged).toHaveLength(1);
-    expect(isUnsent(merged[0], SHEET)).toBe(true);
-  });
-
-  it('leaves categories whose tab was not read alone', () => {
-    const local = [entry('a', '2026-10-01T00:00:00Z', { syncedTo: SHEET })];
-    expect(mergeEntries(local, [], new Set(), SHEET)).toEqual(local);
-  });
-
   it('keeps the device copy when the sheet time is unreadable', () => {
-    const merged = mergeEntries([entry('a', '2026-10-01T00:00:00Z')], [{ ...entry('a', '10/2/2026 0:00:00'), values: {} }], pulled, SHEET);
+    const merged = mergePage([entry('a', '2026-10-01T00:00:00Z')], [{ ...entry('a', '10/2/2026 0:00:00'), values: {} }]);
     expect(merged[0].values.item).toBe('a');
   });
 

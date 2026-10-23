@@ -24,6 +24,7 @@ The screenshots use example data.
 - [Category Studio](#category-studio)
 - [Resetting the sheet and backups](#resetting-the-sheet-and-backups)
 - [How data is stored and synced](#how-data-is-stored-and-synced)
+- [Related apps](#related-apps)
 - [Development](#development)
 - [License](#license)
 
@@ -219,25 +220,43 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 - **Entries load page by page:** SheetSync doesn't download the whole sheet. Opening a category reads its newest 25 rows from the sheet, and scrolling to the end of the list reads the next 25 older rows, until the top of the tab.
   - Rows on a page are merged into the device by ID, and the newer **Saved At** wins. That brings in entries from other devices and edits made in mdlife or directly in Google Sheets.
   - Entries that have been loaded stay on the device. Entries you haven't scrolled to aren't loaded, so the home screen counts and monthly reports only include entries on this device.
+  - If rows are inserted or deleted in the sheet while you scroll, SheetSync finds the last row it read again by its ID and carries on from there (or starts again from the newest rows if that row was deleted), so no entry is skipped or listed twice.
+  - Resetting the sheet or loading a backup starts the open category's list again from the newest rows.
+  - If Google can't read a tab for any reason other than the tab not existing, the list shows the error instead of stopping quietly.
 - **In the sheet:** each row has **ID**, **Saved At**, then one column per field in the studio's order.
   - Rows are matched by ID, so editing an entry updates its row.
   - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.
-- **Staying connected:** Google sign-in lasts about an hour and survives reloading the page, until you close the tab. When it runs out, the header shows **Reconnect**. Your entries are kept and sent once you reconnect.
+- **Staying connected:** Google sign-in lasts about an hour and survives reloading the page, until you close the tab. When it runs out, or you open SheetSync again after closing the tab, the header still shows your Google account with **Reconnect** (until you sign out). Your entries are kept and sent once you reconnect.
 - **Switching spreadsheets:** connecting a different spreadsheet sends every entry on the device to it. Normally you won't need to: Reset and Load change the one SheetSync spreadsheet in place.
 - **Changing fields later:** reordering or deleting fields changes the header row, but rows already in the sheet keep their original column positions.
 - **Older versions of SheetSync:** if you used the earlier Life / Health / Prayer / Habits version, your connected spreadsheet stays linked. Its old tabs are left untouched, and the new category tabs are added beside them.
 
+## Related apps
+
+- **[mdlife](https://github.com/sherol/mdlife)** can open your SheetSync spreadsheet as a note: it shows the tabs and entries and lets you edit or add rows. It reads the layout from `App_Config` and matches rows by **ID**, writing **Saved At** the same way SheetSync does, so its edits show up here when the category's page is next read.
+- **[bookclub](https://github.com/sherol/bookclub)** signs in with Google through SheetSync's Firebase project. It keeps its own spreadsheet and doesn't read SheetSync's.
+
 ## Development
 
-Requirements: Node.js 20 or newer.
+Requirements: Node.js 22.12+ (Vitest 5 needs it; CI uses Node 24, which the Firebase packages ask for). The repo has a `bun.lock`; CI installs with npm.
 
 ```bash
-npm install --legacy-peer-deps
+npm install      # or: bun install
 npm run dev      # dev server on http://localhost:3000
 npm run lint     # type check (tsc --noEmit)
 npm test         # unit tests (vitest)
 npm run build    # production build in dist/
+npm run preview  # serve the production build
+npm run clean    # remove dist/
 ```
+
+### Google sign-in and configuration
+
+There are no environment variables or secrets to set. Sign-in uses Firebase Auth with Google as the provider; the Firebase web config is in `src/services/auth.ts` (these values are public and identify the project).
+
+SheetSync asks for two scopes: `spreadsheets` (read and write any spreadsheet you connect, including by ID / URL) and `drive.file` (Drive access only to files SheetSync created). So **Choose from Drive**, the `backup` folder and backups list only files SheetSync made, and backing up a spreadsheet SheetSync didn't create fails with a message saying so.
+
+The Firebase project is shared with bookclub. For sign-in to work on a new domain, add it under Firebase **Authentication → Settings → Authorized domains** (`sherol.github.io` and `localhost` are needed for the live app and `npm run dev`).
 
 ### Project layout
 
@@ -245,17 +264,25 @@ npm run build    # production build in dist/
 |---|---|
 | `src/config/categories.ts` | The default categories, the rating colour scale, entry title/date helpers |
 | `src/config/bible.ts` | The 66 books with chapter counts, chapter parsing, progress maths |
-| `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs, write rows, rename tabs, reports |
+| `src/types/index.ts` | Shared types: categories, fields, entries, lists, quick picks, app config |
+| `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs and pages, write rows, rename tabs, reset, backups and restore, reports |
 | `src/services/syncEngine.ts`, `syncLogic.ts` | Sync: the shared layout in `App_Config`, sending unsent entries in batches, loading a category's entries a page at a time (`loadEntriesPage`) |
 | `src/hooks/useSheetSync.ts` | When sync runs: on connect, after saves and layout edits, on return to the app, when back online |
-| `src/services/storageService.ts` | Local storage, and migration from older saved settings |
+| `src/services/storageService.ts` | Local storage, and migration from older saved settings (`SCHEMA_VERSION`, `upgradeCategories`) |
 | `src/services/auth.ts` | Google sign-in through Firebase Auth; the token is kept for the tab until it expires |
-| `src/components/MobileView.tsx` | Home list, entry form, recent entries |
+| `src/App.tsx` | App state, sign-in, saving entries, reset and backup flows |
+| `src/components/Navbar.tsx` | Top bar: spreadsheet name, sync badge, view switcher, sign-in |
+| `src/components/SpreadsheetModal.tsx` | Spreadsheet dialog: Reset Sheet, Backups, Choose from Drive, Enter ID / URL |
+| `src/components/MobileView.tsx` | Home list, entry form, the category's entries (loaded page by page) |
 | `src/components/DesktopStudio.tsx`, `CategorySettings.tsx` | Category Studio |
 | `src/components/FieldInput.tsx` | One input component for every field type |
+| `src/components/ListPicker.tsx` | Dropdown from a shared list (e.g. Projects), with its inline list editor |
+| `src/components/QuickPicks.tsx` | Quick-pick buttons on a form |
 | `src/components/MonthlyReportView.tsx` | Monthly report |
 | `src/components/BibleProgress.tsx` | Bible study progress map |
+| `src/services/__tests__/` | Unit tests for sync, paging, backups, sign-in after a reload |
 | `public/favicon.svg` | The white-outline squirrel; the build embeds it in `index.html` |
+| `public/squirrel-icon.png` | The brown squirrel in the top bar |
 
 ### Deployment
 

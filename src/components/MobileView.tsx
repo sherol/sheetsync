@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Send, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, X, ExternalLink, AlertCircle, Loader2 } from 'lucide-react';
 import { AppConfig, CategoryDef, Entry, QuickPick } from '../types';
+import type { PageCursor } from '../services/sheetsService';
 import { SquirrelIcon } from './SquirrelIcon';
 import { CategoryIcon } from './CategoryIcon';
 import { FieldInput } from './FieldInput';
@@ -21,14 +22,14 @@ interface MobileViewProps {
    * newest page, then whatever the previous call returned. Resolves to the next page's `before`,
    * null when there are no older rows, or undefined when the sheet isn't connected.
    */
-  onLoadEntriesPage?: (categoryId: string, before: number | null) => Promise<number | null | undefined>;
+  onLoadEntriesPage?: (categoryId: string, before: PageCursor | null) => Promise<PageCursor | null | undefined>;
 }
 
 // Entries shown per step as the list scrolls.
 const LIST_STEP = 25;
 
-/** Where paging through the sheet has got to: 'start' = nothing read yet, a row number, or 'end'. */
-type SheetCursor = 'start' | number | 'end' | 'offline';
+/** Where paging through the sheet has got to: 'start' = nothing read yet, the next page's cursor, or 'end'. */
+type SheetCursor = 'start' | PageCursor | 'end' | 'offline';
 
 const localToday = () => new Date().toLocaleDateString('en-CA');
 const localTime = () => new Date().toTimeString().slice(0, 5);
@@ -108,24 +109,28 @@ export const MobileView: React.FC<MobileViewProps> = ({
   const [pageError, setPageError] = useState<string | null>(null);
   const [atListEnd, setAtListEnd] = useState(false);
   const listEndRef = useRef<HTMLDivElement | null>(null);
-  const loadingFor = useRef<string | null>(null);
+  // Each load gets a number; a load whose number is no longer current (the category changed, the
+  // sign-in changed, or the list was reset) is ignored when it finishes.
+  const loadSeq = useRef(0);
+  const loadInFlight = useRef(false);
   const recent = allEntries.slice(0, shown);
 
   const loadPage = useCallback(
     async (categoryId: string, from: SheetCursor) => {
-      if (!onLoadEntriesPage || loadingFor.current) return;
-      loadingFor.current = categoryId;
+      if (!onLoadEntriesPage || loadInFlight.current) return;
+      const seq = ++loadSeq.current;
+      loadInFlight.current = true;
       setPageLoading(true);
       setPageError(null);
       try {
-        const next = await onLoadEntriesPage(categoryId, typeof from === 'number' ? from : null);
-        if (loadingFor.current !== categoryId) return; // switched category meanwhile
+        const next = await onLoadEntriesPage(categoryId, typeof from === 'object' ? from : null);
+        if (seq !== loadSeq.current) return; // reset meanwhile
         setCursor(next === undefined ? 'offline' : next === null ? 'end' : next);
       } catch (err: any) {
-        if (loadingFor.current === categoryId) setPageError(err?.message || 'Could not load entries from the sheet');
+        if (seq === loadSeq.current) setPageError(err?.message || 'Could not load entries from the sheet');
       } finally {
-        if (loadingFor.current === categoryId) {
-          loadingFor.current = null;
+        if (seq === loadSeq.current) {
+          loadInFlight.current = false;
           setPageLoading(false);
         }
       }
@@ -135,7 +140,8 @@ export const MobileView: React.FC<MobileViewProps> = ({
 
   // Opening a category reads its newest page, so recent edits made elsewhere (e.g. mdlife) show up.
   useEffect(() => {
-    loadingFor.current = null;
+    loadSeq.current++;
+    loadInFlight.current = false;
     setShown(LIST_STEP);
     setCursor('start');
     setPageLoading(false);
@@ -154,7 +160,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
   useEffect(() => {
     if (!atListEnd || !category || pageLoading || pageError) return;
     if (shown < allEntries.length) setShown((n) => n + LIST_STEP);
-    else if (cursor === 'start' || typeof cursor === 'number') void loadPage(category.id, cursor);
+    else if (cursor === 'start' || typeof cursor === 'object') void loadPage(category.id, cursor);
   }, [atListEnd, shown, allEntries.length, cursor, pageLoading, pageError, category, loadPage]);
 
   const shellClass = `flex flex-col bg-[#0b0c10] text-stone-100 ${

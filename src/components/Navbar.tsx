@@ -1,7 +1,6 @@
 import React from 'react';
 import { User } from 'firebase/auth';
 import { 
-  FileSpreadsheet, 
   ExternalLink, 
   Smartphone, 
   Settings2, 

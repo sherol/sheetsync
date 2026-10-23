@@ -10,7 +10,7 @@ function inlineSvgFavicon(): Plugin {
   return {
     name: 'inline-svg-favicon',
     transformIndexHtml(html) {
-      const svg = fs.readFileSync(path.resolve(__dirname, 'public/favicon.svg'), 'utf8');
+      const svg = fs.readFileSync(path.resolve(import.meta.dirname, 'public/favicon.svg'), 'utf8');
       const dataUri = `data:image/svg+xml,${encodeURIComponent(svg.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim())}`;
       return html.replace(/href="\.\/favicon\.svg(\?[^"]*)?"/, `href="${dataUri}"`);
     },
@@ -23,7 +23,7 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss(), inlineSvgFavicon()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {

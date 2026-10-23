@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   FileSpreadsheet, 
-  Plus, 
   ExternalLink, 
   Check, 
   RefreshCw, 

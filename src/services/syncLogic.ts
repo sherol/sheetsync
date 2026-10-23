@@ -5,13 +5,12 @@ import { withDefaultLists } from '../config/categories';
 /**
  * Pure helpers for two-way sync between this device and the Google Sheet.
  *
- * An entry is "sent" when entry.syncedTo is the connected spreadsheet's ID. Pulling the sheet
- * merges its rows into the device by ID; when both sides have an entry, the newer Saved At wins.
- * With the same Saved At, the sheet wins (someone edited the cells by hand), except for entries
- * from before two-way sync (syncedTo unset): those are sent again once, so the sheet gets the
- * device's exact values.
- * Nothing is ever deleted from the device by a pull: an entry missing from the sheet is marked
- * unsent and written back on the next push.
+ * An entry is "sent" when entry.syncedTo is the connected spreadsheet's ID. Reading a page of
+ * the sheet merges its rows into the device by ID; when both sides have an entry, the newer Saved
+ * At wins. With the same Saved At, the sheet wins (someone edited the cells by hand), except for
+ * entries from before two-way sync (syncedTo unset): those are sent again once, so the sheet gets
+ * the device's exact values.
+ * Nothing is ever deleted from the device by reading the sheet.
  */
 
 export const LAYOUT_KEY = 'schema_config';
@@ -129,40 +128,6 @@ export function rowsToEntries(category: CategoryDef, rows: string[][], spreadshe
 }
 
 /**
- * Merges entries read from the sheet into the device's entries.
- * pulledCategoryIds lists the categories whose tab was read; entries of other categories are
- * left as they are.
- */
-export function mergeEntries(
-  local: Entry[],
-  remote: Entry[],
-  pulledCategoryIds: Set<string>,
-  spreadsheetId: string
-): Entry[] {
-  const remoteById = new Map(remote.map((e) => [e.id, e]));
-  const seen = new Set<string>();
-  const merged: Entry[] = [];
-
-  for (const entry of local) {
-    if (!pulledCategoryIds.has(entry.categoryId)) {
-      merged.push(entry);
-      continue;
-    }
-    seen.add(entry.id);
-    const theirs = remoteById.get(entry.id);
-    if (!theirs || theirs.categoryId !== entry.categoryId) {
-      // Not in the sheet (never sent, or the row was removed): keep it and send it again.
-      merged.push(entry.syncedTo === spreadsheetId ? { ...entry, syncedTo: undefined } : entry);
-      continue;
-    }
-    merged.push(pickVersion(entry, theirs));
-  }
-
-  const added = remote.filter((e) => !seen.has(e.id));
-  return [...added, ...merged];
-}
-
-/**
  * Which copy of an entry to keep when the device and the sheet both have it: the newer Saved At.
  * With the same Saved At the sheet wins (cells edited by hand), except for an entry this device
  * hasn't sent yet. If the sheet's Saved At can't be read, the device wins.
@@ -188,7 +153,14 @@ export function mergePage(local: Entry[], page: Entry[]): Entry[] {
     seen.add(entry.id);
     return pickVersion(entry, theirs);
   });
-  const added = page.filter((e) => !seen.has(e.id) && !local.some((l) => l.id === e.id));
+  // Each ID is added once, even if it is already on the device in another category or appears
+  // twice on the page.
+  const localIds = new Set(local.map((l) => l.id));
+  const added = page.filter((e) => {
+    if (seen.has(e.id) || localIds.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
   return added.length === 0 && merged.every((e, i) => e === local[i]) ? local : [...added, ...merged];
 }
 

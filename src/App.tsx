@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { initAuth, googleSignIn, logout, markTokenExpired } from './services/auth';
 import { StorageService, INITIAL_CONFIG, SCHEMA_VERSION } from './services/storageService';
 import { DEFAULT_CATEGORIES } from './config/categories';
-import { SheetsAuthError, SheetsService } from './services/sheetsService';
+import { PageCursor, SheetsAuthError, SheetsService } from './services/sheetsService';
 import { AppConfig, Entry, CategoryDef, CustomField, QuickPick } from './types';
 import { useSheetSync } from './hooks/useSheetSync';
 import { isUnsent, parseLayoutBackup } from './services/syncLogic';
@@ -19,7 +19,7 @@ import { MobileView } from './components/MobileView';
 import { MonthlyReportView } from './components/MonthlyReportView';
 import { SpreadsheetModal } from './components/SpreadsheetModal';
 import { DestructiveConfirmModal } from './components/DestructiveConfirmModal';
-import { Smartphone, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -66,6 +66,10 @@ export default function App() {
   const syncStatus = { ...sync, pendingCount };
   const [isSyncingReport, setIsSyncingReport] = useState(false);
 
+  // Bumped when the sheet's contents are replaced (reset, loading a backup), so the open category
+  // drops its paging position and reads the newest page again.
+  const [sheetEpoch, setSheetEpoch] = useState(0);
+
   // Modals
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
 
@@ -96,8 +100,12 @@ export default function App() {
           setUser(null);
           setAccessToken(null);
         },
-        // Token expired: stay signed in to Firebase so the header offers a one-tap reconnect.
-        () => setAccessToken(null)
+        // Token expired (now, or before this reload): stay signed in to Firebase so the header
+        // offers a one-tap reconnect.
+        (expiredUser) => {
+          if (expiredUser) setUser(expiredUser);
+          setAccessToken(null);
+        }
       );
       return () => unsubscribe();
     } catch (e) {
@@ -199,6 +207,7 @@ export default function App() {
     await SheetsService.setChangedSinceBackup(token, sheetId, false);
     updateEntries(() => []);
     updateConfig(() => ({ ...next, layoutSyncedTo: sheetId, sheetChanged: false, lastSyncedAt: now }));
+    setSheetEpoch((n) => n + 1);
   };
 
   /**
@@ -275,12 +284,12 @@ export default function App() {
     else void runSync(true);
   };
 
-  // Save (or update) an entry in any category; it's sent to the sheet when connected
   // Load one page of a category's entries from the sheet (newest first) as its list scrolls.
   // Returns the next, older page's position, null at the top, or undefined when not connected.
-  // Changes only with the sign-in, so connecting reloads the open category's newest page.
+  // Changes only with the sign-in, the connected spreadsheet and sheetEpoch, so connecting either,
+  // or resetting / loading a backup into the sheet, reloads the open category's newest page.
   const handleLoadEntriesPage = useCallback(
-    async (categoryId: string, before: number | null): Promise<number | null | undefined> => {
+    async (categoryId: string, before: PageCursor | null): Promise<PageCursor | null | undefined> => {
       const sheetId = configRef.current.spreadsheetId;
       const category = configRef.current.categories.find((c) => c.id === categoryId);
       if (!accessToken || !sheetId || !category) return undefined;
@@ -291,9 +300,10 @@ export default function App() {
         throw err;
       }
     },
-    [accessToken, updateEntries]
+    [accessToken, config.spreadsheetId, sheetEpoch, updateEntries]
   );
 
+  // Save (or update) an entry in any category; it's sent to the sheet when connected
   const handleSaveEntry = async (categoryId: string, values: Record<string, any>, existingId?: string) => {
     const category = config.categories.find((c) => c.id === categoryId);
     if (!category) return;
@@ -378,9 +388,10 @@ export default function App() {
       actionText: 'Delete Tab',
       onConfirm: () => {
         updateEntries((list) => list.filter((e) => e.categoryId !== category.id));
+        const latest = configRef.current;
         handleUpdateConfig({
-          ...config,
-          categories: config.categories.filter((c) => c.id !== category.id),
+          ...latest,
+          categories: latest.categories.filter((c) => c.id !== category.id),
         });
         setConfirmModalState(prev => ({ ...prev, isOpen: false }));
       },
@@ -395,9 +406,10 @@ export default function App() {
       description: `It will disappear from the form and from the header row of the ${category.sheetName} tab the next time an entry is saved. Values already in the sheet are not deleted, but older rows keep their original column positions.`,
       actionText: 'Delete Field',
       onConfirm: () => {
+        const latest = configRef.current;
         handleUpdateConfig({
-          ...config,
-          categories: config.categories.map((c) =>
+          ...latest,
+          categories: latest.categories.map((c) =>
             c.id === category.id ? { ...c, fields: c.fields.filter((f) => f.id !== field.id) } : c
           ),
         });
@@ -482,8 +494,8 @@ export default function App() {
                         config={config}
                         entries={entries}
                         onSaveEntry={handleSaveEntry}
-              onUpdateList={handleUpdateList}
-              onUpdateQuickPicks={handleUpdateQuickPicks}
+                        onUpdateList={handleUpdateList}
+                        onUpdateQuickPicks={handleUpdateQuickPicks}
                         isSyncing={syncStatus.state === 'syncing'}
                         isInDesktopFrame={true}
                         onLoadEntriesPage={handleLoadEntriesPage}
