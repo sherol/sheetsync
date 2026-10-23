@@ -238,7 +238,7 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 
 ## Development
 
-Requirements: Node.js 20.19+ or 22.12+ (what Vite 8 needs). The repo has a `bun.lock`; CI installs with npm.
+Requirements: Node.js 22.12+ (Vitest 5 needs it; CI uses Node 24, which the Firebase packages ask for). The repo has a `bun.lock`; CI installs with npm.
 
 ```bash
 npm install      # or: bun install
