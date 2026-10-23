@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Send, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, X, ExternalLink, AlertCircle } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Send, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, X, ExternalLink, AlertCircle, Loader2 } from 'lucide-react';
 import { AppConfig, CategoryDef, Entry, QuickPick } from '../types';
 import { SquirrelIcon } from './SquirrelIcon';
 import { CategoryIcon } from './CategoryIcon';
@@ -16,7 +16,19 @@ interface MobileViewProps {
   onUpdateQuickPicks: (categoryId: string, picks: QuickPick[]) => void;
   isSyncing: boolean;
   isInDesktopFrame?: boolean;
+  /**
+   * Load one page of a category's entries from the sheet, newest first. `before` is null for the
+   * newest page, then whatever the previous call returned. Resolves to the next page's `before`,
+   * null when there are no older rows, or undefined when the sheet isn't connected.
+   */
+  onLoadEntriesPage?: (categoryId: string, before: number | null) => Promise<number | null | undefined>;
 }
+
+// Entries shown per step as the list scrolls.
+const LIST_STEP = 25;
+
+/** Where paging through the sheet has got to: 'start' = nothing read yet, a row number, or 'end'. */
+type SheetCursor = 'start' | number | 'end' | 'offline';
 
 const localToday = () => new Date().toLocaleDateString('en-CA');
 const localTime = () => new Date().toTimeString().slice(0, 5);
@@ -42,6 +54,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
   onUpdateQuickPicks,
   isSyncing,
   isInDesktopFrame = false,
+  onLoadEntriesPage,
 }) => {
   const categories = config.categories;
   // null = home screen listing every category
@@ -77,16 +90,72 @@ export const MobileView: React.FC<MobileViewProps> = ({
     [categories, entries]
   );
 
-  const recent = useMemo(() => {
+  const allEntries = useMemo(() => {
     if (!category) return [];
     return entries
       .filter((e) => e.categoryId === category.id)
       .sort((a, b) => {
         const byDate = entryDate(category, b).localeCompare(entryDate(category, a));
         return byDate !== 0 ? byDate : b.timestamp.localeCompare(a.timestamp);
-      })
-      .slice(0, 10);
+      });
   }, [entries, category]);
+
+  // Page-by-page list: show LIST_STEP more entries each time the end of the list scrolls into
+  // view, reading older pages from the sheet once the device's own entries run out.
+  const [shown, setShown] = useState(LIST_STEP);
+  const [cursor, setCursor] = useState<SheetCursor>('start');
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [atListEnd, setAtListEnd] = useState(false);
+  const listEndRef = useRef<HTMLDivElement | null>(null);
+  const loadingFor = useRef<string | null>(null);
+  const recent = allEntries.slice(0, shown);
+
+  const loadPage = useCallback(
+    async (categoryId: string, from: SheetCursor) => {
+      if (!onLoadEntriesPage || loadingFor.current) return;
+      loadingFor.current = categoryId;
+      setPageLoading(true);
+      setPageError(null);
+      try {
+        const next = await onLoadEntriesPage(categoryId, typeof from === 'number' ? from : null);
+        if (loadingFor.current !== categoryId) return; // switched category meanwhile
+        setCursor(next === undefined ? 'offline' : next === null ? 'end' : next);
+      } catch (err: any) {
+        if (loadingFor.current === categoryId) setPageError(err?.message || 'Could not load entries from the sheet');
+      } finally {
+        if (loadingFor.current === categoryId) {
+          loadingFor.current = null;
+          setPageLoading(false);
+        }
+      }
+    },
+    [onLoadEntriesPage]
+  );
+
+  // Opening a category reads its newest page, so recent edits made elsewhere (e.g. mdlife) show up.
+  useEffect(() => {
+    loadingFor.current = null;
+    setShown(LIST_STEP);
+    setCursor('start');
+    setPageLoading(false);
+    setPageError(null);
+    if (category) void loadPage(category.id, 'start');
+  }, [category?.id, loadPage]);
+
+  useEffect(() => {
+    const el = listEndRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([e]) => setAtListEnd(e.isIntersecting), { rootMargin: '200px' });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [category?.id]);
+
+  useEffect(() => {
+    if (!atListEnd || !category || pageLoading || pageError) return;
+    if (shown < allEntries.length) setShown((n) => n + LIST_STEP);
+    else if (cursor === 'start' || typeof cursor === 'number') void loadPage(category.id, cursor);
+  }, [atListEnd, shown, allEntries.length, cursor, pageLoading, pageError, category, loadPage]);
 
   const shellClass = `flex flex-col bg-[#0b0c10] text-stone-100 ${
     isInDesktopFrame
@@ -297,10 +366,10 @@ export const MobileView: React.FC<MobileViewProps> = ({
         {/* Recent entries */}
         <section className="space-y-2">
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-stone-400 px-1">
-            Recent {category.label}
+            {category.label} entries
           </h3>
           {recent.length === 0 ? (
-            <p className="text-xs text-stone-500 px-1">Nothing logged here yet.</p>
+            pageLoading ? null : <p className="text-xs text-stone-500 px-1">Nothing logged here yet.</p>
           ) : (
             recent.map((entry) => (
               <div
@@ -363,6 +432,25 @@ export const MobileView: React.FC<MobileViewProps> = ({
               </div>
             ))
           )}
+          <div ref={listEndRef} className="px-1 py-2 text-[11px] text-stone-500 flex items-center justify-center gap-1.5 min-h-8">
+            {pageLoading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading entries from your sheet…
+              </>
+            ) : pageError ? (
+              <>
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                <span>Couldn't load more from the sheet.</span>
+                <button type="button" onClick={() => setPageError(null)} className="font-bold text-stone-300 underline">
+                  Retry
+                </button>
+              </>
+            ) : shown < allEntries.length ? null : cursor === 'offline' ? (
+              <span>Connect Google to see older entries from your sheet.</span>
+            ) : cursor === 'end' && allEntries.length > 0 ? (
+              <span>That's every {category.label} entry.</span>
+            ) : null}
+          </div>
         </section>
       </div>
     </div>

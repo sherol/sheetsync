@@ -343,6 +343,47 @@ export class SheetsService {
   }
 
   /**
+   * Read one page of a tab, newest rows first: new entries are appended at the bottom, so a page is
+   * the pageSize rows just above `before` (a row number), or the last rows of the tab when `before`
+   * is null. Returns the header row followed by the page, and the `before` for the next (older)
+   * page, or null when the page reaches the top. A missing tab reads as empty.
+   */
+  static async readPage(
+    accessToken: string,
+    spreadsheetId: string,
+    sheetName: string,
+    before: number | null,
+    pageSize: number
+  ): Promise<{ rows: string[][]; next: number | null }> {
+    const batchGet = async (ranges: string[]): Promise<string[][][] | null> => {
+      const params = new URLSearchParams({ valueRenderOption: 'FORMATTED_VALUE', majorDimension: 'ROWS' });
+      ranges.forEach((r) => params.append('ranges', r));
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.status === 400) return null; // no such tab
+      if (!res.ok) throw await failure(res, `Could not read ${sheetName}`);
+      const data = await res.json();
+      return (data.valueRanges || []).map((vr: any) => (vr.values || []).map((row: any[]) => row.map((c) => String(c ?? ''))));
+    };
+    const tab = quoteTab(sheetName);
+
+    let end = before === null ? 0 : before - 1;
+    if (before === null) {
+      // The ID column tells where the last row is (Sheets leaves trailing empty rows out).
+      const ids = await batchGet([`${tab}!A:A`]);
+      if (!ids) return { rows: [], next: null };
+      end = ids[0].length;
+    }
+    if (end < 2) return { rows: [], next: null };
+    const start = Math.max(2, end - pageSize + 1);
+    const got = await batchGet([`${tab}!1:1`, `${tab}!${start}:${end}`]);
+    if (!got) return { rows: [], next: null };
+    const [header = [], page = []] = got;
+    return { rows: [header[0] ?? [], ...page], next: start > 2 ? start : null };
+  }
+
+  /**
    * Write entries to their category tab: rows with the same ID are overwritten, the rest are
    * appended. The header row is refreshed so newly added fields get a column.
    */

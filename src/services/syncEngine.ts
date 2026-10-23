@@ -1,8 +1,8 @@
-import { AppConfig, Entry } from '../types';
+import { AppConfig, Entry, CategoryDef } from '../types';
 import { SheetsAuthError, SheetsService } from './sheetsService';
 import { INITIAL_CONFIG, SCHEMA_VERSION } from './storageService';
 import { DEFAULT_CATEGORIES, DEFAULT_LISTS } from '../config/categories';
-import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, readChangedFlag, rowsToEntries } from './syncLogic';
+import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, readChangedFlag, rowsToEntries, mergePage } from './syncLogic';
 
 export interface SyncContext {
   token: string;
@@ -138,4 +138,32 @@ export async function syncOnce({
   }
 
   updateConfig((c) => ({ ...c, lastSyncedAt: new Date().toISOString() }));
+}
+
+/** Entries read from the sheet per page as a category's list scrolls. */
+export const ENTRIES_PAGE_SIZE = 25;
+
+/**
+ * Load one page of a category's tab (newest rows first; see SheetsService.readPage) and merge
+ * it into the device. Returns the `before` for the next, older page, or null at the top.
+ */
+export async function loadEntriesPage({
+  token,
+  sheetId,
+  category,
+  before,
+  updateEntries,
+  pageSize = ENTRIES_PAGE_SIZE,
+}: {
+  token: string;
+  sheetId: string;
+  category: CategoryDef;
+  before: number | null;
+  updateEntries: (fn: (e: Entry[]) => Entry[]) => void;
+  pageSize?: number;
+}): Promise<number | null> {
+  const { rows, next } = await SheetsService.readPage(token, sheetId, category.sheetName, before, pageSize);
+  const page = rowsToEntries(category, rows, sheetId);
+  if (page.length > 0) updateEntries((local) => mergePage(local, page));
+  return next;
 }

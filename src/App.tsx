@@ -5,14 +5,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User } from 'firebase/auth';
-import { initAuth, googleSignIn, logout } from './services/auth';
+import { initAuth, googleSignIn, logout, markTokenExpired } from './services/auth';
 import { StorageService, INITIAL_CONFIG, SCHEMA_VERSION } from './services/storageService';
 import { DEFAULT_CATEGORIES } from './config/categories';
-import { SheetsService } from './services/sheetsService';
+import { SheetsAuthError, SheetsService } from './services/sheetsService';
 import { AppConfig, Entry, CategoryDef, CustomField, QuickPick } from './types';
 import { useSheetSync } from './hooks/useSheetSync';
 import { isUnsent, parseLayoutBackup } from './services/syncLogic';
-import { layoutJson } from './services/syncEngine';
+import { layoutJson, loadEntriesPage } from './services/syncEngine';
 import { Navbar, AppViewMode } from './components/Navbar';
 import { DesktopStudio } from './components/DesktopStudio';
 import { MobileView } from './components/MobileView';
@@ -276,6 +276,24 @@ export default function App() {
   };
 
   // Save (or update) an entry in any category; it's sent to the sheet when connected
+  // Load one page of a category's entries from the sheet (newest first) as its list scrolls.
+  // Returns the next, older page's position, null at the top, or undefined when not connected.
+  // Changes only with the sign-in, so connecting reloads the open category's newest page.
+  const handleLoadEntriesPage = useCallback(
+    async (categoryId: string, before: number | null): Promise<number | null | undefined> => {
+      const sheetId = configRef.current.spreadsheetId;
+      const category = configRef.current.categories.find((c) => c.id === categoryId);
+      if (!accessToken || !sheetId || !category) return undefined;
+      try {
+        return await loadEntriesPage({ token: accessToken, sheetId, category, before, updateEntries });
+      } catch (err) {
+        if (err instanceof SheetsAuthError) markTokenExpired();
+        throw err;
+      }
+    },
+    [accessToken, updateEntries]
+  );
+
   const handleSaveEntry = async (categoryId: string, values: Record<string, any>, existingId?: string) => {
     const category = config.categories.find((c) => c.id === categoryId);
     if (!category) return;
@@ -468,6 +486,7 @@ export default function App() {
               onUpdateQuickPicks={handleUpdateQuickPicks}
                         isSyncing={syncStatus.state === 'syncing'}
                         isInDesktopFrame={true}
+                        onLoadEntriesPage={handleLoadEntriesPage}
                       />
                     </div>
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-32 h-1 bg-stone-700 rounded-full pointer-events-none" />
@@ -490,6 +509,7 @@ export default function App() {
               onUpdateQuickPicks={handleUpdateQuickPicks}
               isSyncing={syncStatus.state === 'syncing'}
               isInDesktopFrame={false}
+              onLoadEntriesPage={handleLoadEntriesPage}
             />
           </div>
         )}
