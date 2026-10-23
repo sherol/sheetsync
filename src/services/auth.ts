@@ -8,7 +8,8 @@ import {
   signOut 
 } from 'firebase/auth';
 
-// Fallback configuration if file is unavailable
+// Firebase web config. These values are public: they identify the project, they are not secrets.
+// (bookclub signs in through the same project.)
 const defaultFirebaseConfig = {
   projectId: "gen-lang-client-0263183169",
   appId: "1:138495577806:web:56ded045b4b2ca73878a9f",

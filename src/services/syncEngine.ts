@@ -85,8 +85,6 @@ export async function syncOnce({
     pushLayout = cfg.layoutUpdatedAt !== null && cfg.layoutSyncedTo !== sheetId;
   }
 
-  // Rename sheet tabs whose name changed (a new title, or an older two-word name) before
-  // anything is written to them, so their rows stay with the category.
   // Before SheetSync writes anything, flag the sheet as changed since its last backup.
   const markChanged = async () => {
     if (configRef.current.sheetChanged === true) return;
@@ -94,6 +92,8 @@ export async function syncOnce({
     updateConfig((c) => ({ ...c, sheetChanged: true }));
   };
 
+  // Rename sheet tabs whose name changed (a new title, or an older two-word name) before
+  // anything is written to them, so their rows stay with the category.
   const renames = configRef.current.categories.filter((c) => c.renameFrom && c.renameFrom !== c.sheetName);
   if (renames.length > 0) await markChanged();
   for (const c of renames) {

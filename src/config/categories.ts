@@ -1,4 +1,5 @@
 import { CategoryDef, ListDef } from '../types';
+import { BIBLE_BOOKS } from './bible';
 
 export const DEFAULT_LISTS: ListDef[] = [
   { id: 'projects', label: 'Projects', items: [], fromCategoryId: 'projects' },
@@ -17,8 +18,6 @@ export function withDefaultLists(lists: ListDef[] | undefined): ListDef[] {
   const missing = DEFAULT_LISTS.filter((d) => !have.some((l) => l.id === d.id));
   return missing.length ? [...have, ...missing] : have;
 }
-import { BIBLE_BOOKS } from './bible';
-
 const SCALE_1_10 = { min: 1, max: 10 };
 
 export const DEFAULT_CATEGORIES: CategoryDef[] = [
