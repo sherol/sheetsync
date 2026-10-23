@@ -100,8 +100,12 @@ export default function App() {
           setUser(null);
           setAccessToken(null);
         },
-        // Token expired: stay signed in to Firebase so the header offers a one-tap reconnect.
-        () => setAccessToken(null)
+        // Token expired (now, or before this reload): stay signed in to Firebase so the header
+        // offers a one-tap reconnect.
+        (expiredUser) => {
+          if (expiredUser) setUser(expiredUser);
+          setAccessToken(null);
+        }
       );
       return () => unsubscribe();
     } catch (e) {

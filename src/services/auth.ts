@@ -55,7 +55,7 @@ let cachedAccessToken: string | null = null;
 let tokenExpiresAt = 0;
 let expiryTimer: ReturnType<typeof setTimeout> | null = null;
 let isSigningIn = false;
-let onExpired: (() => void) | null = null;
+let onExpired: ((user?: User) => void) | null = null;
 
 const isTokenUsable = () => !!cachedAccessToken && Date.now() < tokenExpiresAt - EXPIRY_SKEW_MS;
 
@@ -113,10 +113,16 @@ export const markTokenExpired = () => {
   if (had && onExpired) onExpired();
 };
 
+/**
+ * Watch the Firebase sign-in. onAuthSuccess gets the user and a usable Google access token;
+ * onAuthFailure means signed out. onTokenExpired means still signed in to Firebase but without a
+ * usable token: called with the user when a reload finds the token gone or expired, and without
+ * one when the token runs out (or Google returns 401) while the app is open.
+ */
 export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void,
-  onTokenExpired?: () => void
+  onTokenExpired?: (user?: User) => void
 ) => {
   if (!authInstance) {
     if (onAuthFailure) onAuthFailure();
@@ -130,8 +136,10 @@ export const initAuth = (
       if (isTokenUsable() && cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else if (!isSigningIn) {
+        // Signed in before, but the token is gone: keep the user so the header offers Reconnect.
         clearToken();
-        if (onAuthFailure) onAuthFailure();
+        if (onTokenExpired) onTokenExpired(user);
+        else if (onAuthFailure) onAuthFailure();
       }
     } else {
       clearToken();

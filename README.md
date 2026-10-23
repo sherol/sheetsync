@@ -226,7 +226,7 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 - **In the sheet:** each row has **ID**, **Saved At**, then one column per field in the studio's order.
   - Rows are matched by ID, so editing an entry updates its row.
   - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.
-- **Staying connected:** Google sign-in lasts about an hour and survives reloading the page, until you close the tab. When it runs out, the header shows **Reconnect**. Your entries are kept and sent once you reconnect.
+- **Staying connected:** Google sign-in lasts about an hour and survives reloading the page, until you close the tab. When it runs out, or you open SheetSync again after closing the tab, the header still shows your Google account with **Reconnect** (until you sign out). Your entries are kept and sent once you reconnect.
 - **Switching spreadsheets:** connecting a different spreadsheet sends every entry on the device to it. Normally you won't need to: Reset and Load change the one SheetSync spreadsheet in place.
 - **Changing fields later:** reordering or deleting fields changes the header row, but rows already in the sheet keep their original column positions.
 - **Older versions of SheetSync:** if you used the earlier Life / Health / Prayer / Habits version, your connected spreadsheet stays linked. Its old tabs are left untouched, and the new category tabs are added beside them.
@@ -280,7 +280,7 @@ The Firebase project is shared with bookclub. For sign-in to work on a new domai
 | `src/components/QuickPicks.tsx` | Quick-pick buttons on a form |
 | `src/components/MonthlyReportView.tsx` | Monthly report |
 | `src/components/BibleProgress.tsx` | Bible study progress map |
-| `src/services/__tests__/` | Unit tests for sync, paging, backups |
+| `src/services/__tests__/` | Unit tests for sync, paging, backups, sign-in after a reload |
 | `public/favicon.svg` | The white-outline squirrel; the build embeds it in `index.html` |
 | `public/squirrel-icon.png` | The brown squirrel in the top bar |
 
