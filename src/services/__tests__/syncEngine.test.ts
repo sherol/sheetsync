@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CATEGORIES } from '../../config/categories';
 import { INITIAL_CONFIG } from '../storageService';
 import { AppConfig, Entry } from '../../types';
-import { syncOnce } from '../syncEngine';
+import { loadEntriesPage, syncOnce } from '../syncEngine';
 import { SheetsAuthError } from '../sheetsService';
 
 const SHEET = 'sheet-1';
@@ -57,7 +57,14 @@ function fakeSheets(initial: Record<string, string[][]> = {}, opts: { status?: n
       return json({ replies });
     }
     if (path === '/values:batchGet') {
-      return json({ valueRanges: url.searchParams.getAll('ranges').map((r) => ({ values: tabs.get(parse(r).tab) })) });
+      const valueRanges = url.searchParams.getAll('ranges').map((r) => {
+        // Whole tabs ('Tab'), the ID column ('Tab'!A:A) or rows ('Tab'!2:26), as loadEntriesPage reads them.
+        const rows = r.match(/^(.*)!(\d+):(\d+)$/);
+        if (rows) return { values: (tabs.get(parse(rows[1]).tab) ?? []).slice(Number(rows[2]) - 1, Number(rows[3])) };
+        const values = tabs.get(parse(r).tab);
+        return { values: r.endsWith('!A:A') ? values?.map((row) => [row[0] ?? '']) : values };
+      });
+      return json({ valueRanges });
     }
     if (path === '/values:batchUpdate') {
       body.data.forEach((d: any) => {
@@ -88,15 +95,23 @@ function device(config: Partial<AppConfig> = {}, entries: Entry[] = []) {
   return {
     configRef,
     entriesRef,
-    run: (pull = true, readEntries = true) =>
+    run: (pull = true) =>
       syncOnce({
         token: 't',
         sheetId: SHEET,
         pull,
-        readEntries,
         configRef,
         updateConfig: (fn) => (configRef.current = fn(configRef.current)),
         entriesRef,
+        updateEntries: (fn) => (entriesRef.current = fn(entriesRef.current)),
+      }),
+    /** Open a category: read its newest page from the sheet, as MobileView does. */
+    openCategory: (categoryId: string) =>
+      loadEntriesPage({
+        token: 't',
+        sheetId: SHEET,
+        category: configRef.current.categories.find((c) => c.id === categoryId)!,
+        before: null,
         updateEntries: (fn) => (entriesRef.current = fn(entriesRef.current)),
       }),
   };
@@ -126,7 +141,7 @@ describe('syncOnce', () => {
     expect(tabs.get('App_Config')).toEqual([['Key', 'JSON Value', 'Last Updated']]);
   });
 
-  it('restores layout and entries on a new device', async () => {
+  it('restores the layout on a new device, then entries as a category is opened', async () => {
     const custom = DEFAULT_CATEGORIES.map((c) => (c.id === 'mood' ? { ...c, label: 'Feelings' } : c));
     const layout = JSON.stringify({ ...INITIAL_CONFIG, categories: custom });
     fakeSheets({
@@ -141,6 +156,8 @@ describe('syncOnce', () => {
 
     expect(d.configRef.current.categories.find((c) => c.id === 'mood')!.label).toBe('Feelings');
     expect(d.configRef.current.layoutSyncedTo).toBe(SHEET);
+    expect(d.entriesRef.current).toEqual([]);
+    expect(await d.openCategory('mood')).toBeNull();
     expect(d.entriesRef.current).toEqual([
       {
         id: 'mood_1',
@@ -165,6 +182,7 @@ describe('syncOnce', () => {
       { id: 'mood_1', categoryId: 'mood', timestamp: '2026-10-18T20:00:00.000Z', values: { score: 7 }, syncedTo: SHEET },
       { id: 'mood_2', categoryId: 'mood', timestamp: '2026-10-18T10:00:00.000Z', values: { date: '2026-10-17', score: 6, recap: 'edited on phone' } },
     ]);
+    await d.openCategory('mood');
     await d.run();
 
     const byId = Object.fromEntries(d.entriesRef.current.map((e) => [e.id, e]));
@@ -196,7 +214,7 @@ describe('syncOnce', () => {
     await expect(device({}, [prayer('p', '2026-10-19T00:00:00.000Z', '1')]).run()).rejects.toBeInstanceOf(SheetsAuthError);
   });
 
-  it('by default restores only the layout, not entries, and still sends unsent entries', async () => {
+  it('restores only the layout, not entries, and still sends unsent entries', async () => {
     const custom = DEFAULT_CATEGORIES.map((c) => (c.id === 'mood' ? { ...c, label: 'Feelings' } : c));
     const layout = JSON.stringify({ ...INITIAL_CONFIG, categories: custom });
     const { tabs, fetchMock } = fakeSheets({
@@ -207,7 +225,7 @@ describe('syncOnce', () => {
       ],
     });
     const d = device({}, [prayer('prayer_1', '2026-10-19T08:00:00.000Z', '4-6')]);
-    await d.run(true, false);
+    await d.run();
 
     expect(d.configRef.current.categories.find((c) => c.id === 'mood')!.label).toBe('Feelings');
     expect(d.entriesRef.current.map((e) => e.id)).toEqual(['prayer_1']);
@@ -225,7 +243,7 @@ describe('syncOnce', () => {
     const layout = JSON.stringify({ schemaVersion: 2, categories: v2, defaultCategoryId: 'mood' });
     fakeSheets({ App_Config: [['Key', 'JSON Value', 'Last Updated'], ['schema_config', layout, '2026-10-01T00:00:00.000Z']] });
     const d = device();
-    await d.run(true, false);
+    await d.run();
 
     const cats = d.configRef.current.categories;
     expect(cats.find((c) => c.id === 'media')).toMatchObject({ label: 'Media', title: 'Media & Music' });
@@ -238,7 +256,7 @@ describe('syncOnce', () => {
     });
     const cats = DEFAULT_CATEGORIES.map((c) => (c.id === 'food' ? { ...c, renameFrom: 'Medicine_Food' } : c));
     const d = device({ categories: cats, layoutUpdatedAt: '2026-10-19T00:00:00.000Z' });
-    await d.run(true, false);
+    await d.run();
 
     expect(tabs.has('Medicine_Food')).toBe(false);
     expect(tabs.get('Medicine')![1][0]).toBe('food_1');
@@ -251,7 +269,7 @@ describe('syncOnce', () => {
       App_Config: [['Key', 'JSON Value', 'Last Updated'], ['changed_since_backup', 'FALSE', '2026-10-19T00:00:00.000Z']],
     });
     const d = device({ sheetChanged: true }, [prayer('prayer_1', '2026-10-19T08:00:00.000Z', '1')]);
-    await d.run(true, false);
+    await d.run();
     // The sheet said FALSE (e.g. reset on another device), so sending an entry sets it again.
     expect(tabs.get('App_Config')!.find((r) => r[0] === 'changed_since_backup')![1]).toBe('TRUE');
 
@@ -269,11 +287,11 @@ describe('syncOnce', () => {
       c.id === 'food' ? { ...c, quickPicks: [{ id: 'q1', label: 'Vitamin D · 1000 IU', values: { item: 'Vitamin D' } }] } : c
     );
     const laptop = device({ lists, categories: cats, layoutUpdatedAt: '2026-10-19T00:00:00.000Z' });
-    await laptop.run(true, false);
+    await laptop.run();
 
     const ipad = device();
     fakeSheets({ App_Config: tabs.get('App_Config')! });
-    await ipad.run(true, false);
+    await ipad.run();
     expect(ipad.configRef.current.lists[0].items).toEqual(['SheetSync', 'Garden']);
     expect(ipad.configRef.current.categories.find((c) => c.id === 'food')!.quickPicks![0].label).toBe('Vitamin D · 1000 IU');
   });

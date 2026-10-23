@@ -17,8 +17,8 @@ interface Options {
 
 /**
  * Sync with the connected Google Sheet.
- * - sync(true) reads the layout backup (and category tabs only if readEntries is on), merges them into the
- *   device (newer Saved At wins), then sends everything not yet in the sheet.
+ * - sync(true) reads the layout backup (the newer layout wins), then sends everything not yet in the
+ *   sheet. Entries are read from the sheet page by page as a category's list scrolls.
  * - sync(false) only sends what's unsent.
  * Runs one at a time; a request made while syncing runs once the current one finishes.
  */

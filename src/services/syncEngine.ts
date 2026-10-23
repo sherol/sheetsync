@@ -2,19 +2,16 @@ import { AppConfig, Entry, CategoryDef } from '../types';
 import { PageCursor, SheetsAuthError, SheetsService } from './sheetsService';
 import { INITIAL_CONFIG, SCHEMA_VERSION } from './storageService';
 import { DEFAULT_CATEGORIES, DEFAULT_LISTS } from '../config/categories';
-import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, readChangedFlag, rowsToEntries, mergePage } from './syncLogic';
+import { isUnsent, layoutDirection, parseLayoutBackup, readChangedFlag, rowsToEntries, mergePage } from './syncLogic';
 
 export interface SyncContext {
   token: string;
   sheetId: string;
-  /** Read the layout backup from App_Config before sending. */
-  pull: boolean;
   /**
-   * Also read every category tab and merge its rows into the device. Off by
-   * default: the sheet is where entries are kept, and each device only sends
-   * its own entries.
+   * Read the layout backup from App_Config before sending. Entries are not read here: a
+   * category's rows are loaded page by page as its list scrolls (loadEntriesPage).
    */
-  readEntries?: boolean;
+  pull: boolean;
   /** Always-current device state; updates must apply synchronously to the ref. */
   configRef: { current: AppConfig };
   updateConfig: (fn: (c: AppConfig) => AppConfig) => void;
@@ -37,14 +34,12 @@ export function layoutJson(config: AppConfig): string {
 
 /**
  * One sync pass. With pull, reads the layout backup (the newer of it and this device's layout
- * wins) and, if readEntries, every category tab, merging rows into the device (newer Saved At
  * wins). Then sends the layout if it changed and every unsent entry.
  */
 export async function syncOnce({
   token,
   sheetId,
   pull,
-  readEntries = false,
   configRef,
   updateConfig,
   entriesRef,
@@ -53,9 +48,8 @@ export async function syncOnce({
   let pushLayout = false;
 
   if (pull) {
-    let cfg = configRef.current;
-    const entryTabs = () => (readEntries ? configRef.current.categories.map((c) => c.sheetName) : []);
-    let tabs = await SheetsService.readTabs(token, sheetId, [...entryTabs(), 'App_Config']);
+    const cfg = configRef.current;
+    const tabs = await SheetsService.readTabs(token, sheetId, ['App_Config']);
 
     const backup = parseLayoutBackup(tabs['App_Config'] ?? [], SCHEMA_VERSION);
     const changed = readChangedFlag(tabs['App_Config'] ?? []) ?? true;
@@ -63,23 +57,8 @@ export async function syncOnce({
     const direction = layoutDirection(cfg, backup, isDefaultLayout(cfg));
     if (direction === 'pull' && backup) {
       updateConfig((c) => ({ ...c, ...backup.layout, layoutUpdatedAt: backup.updatedAt, layoutSyncedTo: sheetId }));
-      cfg = configRef.current;
-      const unread = entryTabs().filter((t) => !(t in tabs));
-      if (unread.length > 0) tabs = { ...tabs, ...(await SheetsService.readTabs(token, sheetId, unread)) };
     }
     pushLayout = direction === 'push';
-
-    if (readEntries) {
-      const pulled = new Set<string>();
-      const remote: Entry[] = [];
-      for (const category of cfg.categories) {
-        const rows = tabs[category.sheetName];
-        if (!rows) continue;
-        pulled.add(category.id);
-        remote.push(...rowsToEntries(category, rows, sheetId));
-      }
-      updateEntries((local) => mergeEntries(local, remote, pulled, sheetId));
-    }
   } else {
     const cfg = configRef.current;
     pushLayout = cfg.layoutUpdatedAt !== null && cfg.layoutSyncedTo !== sheetId;
