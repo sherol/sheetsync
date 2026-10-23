@@ -241,7 +241,7 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 Requirements: Node.js 20.19+ or 22.12+ (what Vite 8 needs). The repo has a `bun.lock`; CI installs with npm.
 
 ```bash
-npm install --legacy-peer-deps   # or: bun install
+npm install      # or: bun install
 npm run dev      # dev server on http://localhost:3000
 npm run lint     # type check (tsc --noEmit)
 npm test         # unit tests (vitest)
