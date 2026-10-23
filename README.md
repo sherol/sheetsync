@@ -24,6 +24,7 @@ The screenshots use example data.
 - [Category Studio](#category-studio)
 - [Resetting the sheet and backups](#resetting-the-sheet-and-backups)
 - [How data is stored and synced](#how-data-is-stored-and-synced)
+- [Related apps](#related-apps)
 - [Development](#development)
 - [License](#license)
 
@@ -227,17 +228,32 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 - **Changing fields later:** reordering or deleting fields changes the header row, but rows already in the sheet keep their original column positions.
 - **Older versions of SheetSync:** if you used the earlier Life / Health / Prayer / Habits version, your connected spreadsheet stays linked. Its old tabs are left untouched, and the new category tabs are added beside them.
 
+## Related apps
+
+- **[mdlife](https://github.com/sherol/mdlife)** can open your SheetSync spreadsheet as a note: it shows the tabs and entries and lets you edit or add rows. It reads the layout from `App_Config` and matches rows by **ID**, writing **Saved At** the same way SheetSync does, so its edits show up here when the category's page is next read.
+- **[bookclub](https://github.com/sherol/bookclub)** signs in with Google through SheetSync's Firebase project. It keeps its own spreadsheet and doesn't read SheetSync's.
+
 ## Development
 
-Requirements: Node.js 20 or newer.
+Requirements: Node.js 20.19+ or 22.12+ (what Vite 8 needs). The repo has a `bun.lock`; CI installs with npm.
 
 ```bash
-npm install --legacy-peer-deps
+npm install --legacy-peer-deps   # or: bun install
 npm run dev      # dev server on http://localhost:3000
 npm run lint     # type check (tsc --noEmit)
 npm test         # unit tests (vitest)
 npm run build    # production build in dist/
+npm run preview  # serve the production build
+npm run clean    # remove dist/
 ```
+
+### Google sign-in and configuration
+
+There are no environment variables or secrets to set. Sign-in uses Firebase Auth with Google as the provider; the Firebase web config is in `src/services/auth.ts` (these values are public and identify the project). `firebase-applet-config.json` holds the same values but the app doesn't read it. `.env.example` and `metadata.json` come from the Google AI Studio template; the app doesn't use them.
+
+SheetSync asks for two scopes: `spreadsheets` (read and write any spreadsheet you connect, including by ID / URL) and `drive.file` (Drive access only to files SheetSync created). So **Choose from Drive**, the `backup` folder and backups list only files SheetSync made, and backing up a spreadsheet SheetSync didn't create fails with a message saying so.
+
+The Firebase project is shared with bookclub. For sign-in to work on a new domain, add it under Firebase **Authentication → Settings → Authorized domains** (`sherol.github.io` and `localhost` are needed for the live app and `npm run dev`).
 
 ### Project layout
 
@@ -245,17 +261,25 @@ npm run build    # production build in dist/
 |---|---|
 | `src/config/categories.ts` | The default categories, the rating colour scale, entry title/date helpers |
 | `src/config/bible.ts` | The 66 books with chapter counts, chapter parsing, progress maths |
-| `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs, write rows, rename tabs, reports |
+| `src/types/index.ts` | Shared types: categories, fields, entries, lists, quick picks, app config |
+| `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs and pages, write rows, rename tabs, reset, backups and restore, reports |
 | `src/services/syncEngine.ts`, `syncLogic.ts` | Sync: the shared layout in `App_Config`, sending unsent entries in batches, loading a category's entries a page at a time (`loadEntriesPage`) |
 | `src/hooks/useSheetSync.ts` | When sync runs: on connect, after saves and layout edits, on return to the app, when back online |
-| `src/services/storageService.ts` | Local storage, and migration from older saved settings |
+| `src/services/storageService.ts` | Local storage, and migration from older saved settings (`SCHEMA_VERSION`, `upgradeCategories`) |
 | `src/services/auth.ts` | Google sign-in through Firebase Auth; the token is kept for the tab until it expires |
-| `src/components/MobileView.tsx` | Home list, entry form, recent entries |
+| `src/App.tsx` | App state, sign-in, saving entries, reset and backup flows |
+| `src/components/Navbar.tsx` | Top bar: spreadsheet name, sync badge, view switcher, sign-in |
+| `src/components/SpreadsheetModal.tsx` | Spreadsheet dialog: Reset Sheet, Backups, Choose from Drive, Enter ID / URL |
+| `src/components/MobileView.tsx` | Home list, entry form, the category's entries (loaded page by page) |
 | `src/components/DesktopStudio.tsx`, `CategorySettings.tsx` | Category Studio |
 | `src/components/FieldInput.tsx` | One input component for every field type |
+| `src/components/ListPicker.tsx` | Dropdown from a shared list (e.g. Projects), with its inline list editor |
+| `src/components/QuickPicks.tsx` | Quick-pick buttons on a form |
 | `src/components/MonthlyReportView.tsx` | Monthly report |
 | `src/components/BibleProgress.tsx` | Bible study progress map |
+| `src/services/__tests__/` | Unit tests for sync, paging, backups |
 | `public/favicon.svg` | The white-outline squirrel; the build embeds it in `index.html` |
+| `public/squirrel-icon.png` | The brown squirrel in the top bar |
 
 ### Deployment
 
