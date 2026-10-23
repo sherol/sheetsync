@@ -1,6 +1,0 @@
-{
-  "name": "SheetSync",
-  "description": "AppSheet-style Google Sheets companion to log media, food & medicine, memories, mood, recipes, projects, people, presentations, ideas, and prayer & Bible study, with fast mobile entry and monthly reports.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

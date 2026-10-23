@@ -252,7 +252,7 @@ npm run clean    # remove dist/
 
 ### Google sign-in and configuration
 
-There are no environment variables or secrets to set. Sign-in uses Firebase Auth with Google as the provider; the Firebase web config is in `src/services/auth.ts` (these values are public and identify the project). `firebase-applet-config.json` holds the same values but the app doesn't read it. `.env.example` and `metadata.json` come from the Google AI Studio template; the app doesn't use them.
+There are no environment variables or secrets to set. Sign-in uses Firebase Auth with Google as the provider; the Firebase web config is in `src/services/auth.ts` (these values are public and identify the project).
 
 SheetSync asks for two scopes: `spreadsheets` (read and write any spreadsheet you connect, including by ID / URL) and `drive.file` (Drive access only to files SheetSync created). So **Choose from Drive**, the `backup` folder and backups list only files SheetSync made, and backing up a spreadsheet SheetSync didn't create fails with a message saying so.
 
