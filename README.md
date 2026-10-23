@@ -76,7 +76,7 @@ The app opens on a **home list** of every category, top to bottom. Each row show
 - **Defaults:** date fields start at today, and time fields start at the current time.
 - **More fields:** fields set to "More fields" in the studio sit behind a **N more fields** toggle below the main form.
 - **Edit:** tap the pencil on a recent entry to load it into the form, change it, then tap **Update entry**. In Google Sheets, an edit overwrites that entry's existing row instead of adding a new one, so you can keep records such as a person's "Last Contact" or a recipe's "Last Cooked" current.
-- **Recent entries:** shows up to 10 entries, newest first, with their choices, coloured ratings and clickable links.
+- **Entries:** the category's entries, newest first, with their choices, coloured ratings and clickable links. The list shows 25 at a time and loads more as you scroll; once this device's own entries run out, it reads older entries from your Google Sheet a page at a time.
 
 ### Quick picks
 
@@ -216,7 +216,9 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 - **On the device:** entries and settings are saved in the browser's local storage, so the app works offline and before you connect.
 - **Sending:** every save is sent to the category's tab when you're connected. Anything saved while offline or signed out is kept as **unsent**. The badge next to the sheet name shows how many entries haven't been sent yet. They're sent automatically when you connect, when the network comes back, or when you tap the badge.
 - **Shared setup:** your tabs, fields, icons, colours and home order are kept in the `App_Config` tab. When you connect, and when you come back to the app after a minute or more, SheetSync reads only that tab: a device that hasn't changed its own setup takes the sheet's, otherwise the newer setup wins. Change a tab on your laptop and the iPad shows the same tabs next time.
-- **Entries aren't loaded back:** SheetSync doesn't read your entries from the sheet. Each device's recent-entries list shows what was logged on that device; the sheet holds everything from every device.
+- **Entries load page by page:** SheetSync doesn't download the whole sheet. Opening a category reads its newest 25 rows from the sheet, and scrolling to the end of the list reads the next 25 older rows, until the top of the tab.
+  - Rows on a page are merged into the device by ID, and the newer **Saved At** wins. That brings in entries from other devices and edits made in mdlife or directly in Google Sheets.
+  - Entries that have been loaded stay on the device. Entries you haven't scrolled to aren't loaded, so the home screen counts and monthly reports only include entries on this device.
 - **In the sheet:** each row has **ID**, **Saved At**, then one column per field in the studio's order.
   - Rows are matched by ID, so editing an entry updates its row.
   - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.
@@ -244,7 +246,7 @@ npm run build    # production build in dist/
 | `src/config/categories.ts` | The default categories, the rating colour scale, entry title/date helpers |
 | `src/config/bible.ts` | The 66 books with chapter counts, chapter parsing, progress maths |
 | `src/services/sheetsService.ts` | Google Sheets and Drive API calls: create, add tabs, read tabs, write rows, rename tabs, reports |
-| `src/services/syncEngine.ts`, `syncLogic.ts` | Sync: the shared layout in `App_Config`, sending unsent entries in batches (reading entries back is available behind the `readEntries` option, off by default) |
+| `src/services/syncEngine.ts`, `syncLogic.ts` | Sync: the shared layout in `App_Config`, sending unsent entries in batches, loading a category's entries a page at a time (`loadEntriesPage`) |
 | `src/hooks/useSheetSync.ts` | When sync runs: on connect, after saves and layout edits, on return to the app, when back online |
 | `src/services/storageService.ts` | Local storage, and migration from older saved settings |
 | `src/services/auth.ts` | Google sign-in through Firebase Auth; the token is kept for the tab until it expires |

@@ -155,20 +155,41 @@ export function mergeEntries(
       merged.push(entry.syncedTo === spreadsheetId ? { ...entry, syncedTo: undefined } : entry);
       continue;
     }
-    const mine = timeOf(entry.timestamp);
-    const other = timeOf(theirs.timestamp);
-    if (Number.isFinite(other) && (!Number.isFinite(mine) || other > mine)) {
-      merged.push(theirs);
-    } else if (Number.isFinite(other) && other === mine) {
-      merged.push(entry.syncedTo === undefined ? entry : theirs);
-    } else {
-      // The device's copy is newer, or the sheet's Saved At can't be read: the device wins.
-      merged.push(entry);
-    }
+    merged.push(pickVersion(entry, theirs));
   }
 
   const added = remote.filter((e) => !seen.has(e.id));
   return [...added, ...merged];
+}
+
+/**
+ * Which copy of an entry to keep when the device and the sheet both have it: the newer Saved At.
+ * With the same Saved At the sheet wins (cells edited by hand), except for an entry this device
+ * hasn't sent yet. If the sheet's Saved At can't be read, the device wins.
+ */
+function pickVersion(mine: Entry, theirs: Entry): Entry {
+  const m = timeOf(mine.timestamp);
+  const t = timeOf(theirs.timestamp);
+  if (Number.isFinite(t) && (!Number.isFinite(m) || t > m)) return theirs;
+  if (Number.isFinite(t) && t === m) return mine.syncedTo === undefined ? mine : theirs;
+  return mine;
+}
+
+/**
+ * Merges one page of rows read from the sheet into the device's entries. Only entries on the
+ * page are added or updated; everything else is left exactly as it is.
+ */
+export function mergePage(local: Entry[], page: Entry[]): Entry[] {
+  const pageById = new Map(page.map((e) => [e.id, e]));
+  const seen = new Set<string>();
+  const merged = local.map((entry) => {
+    const theirs = pageById.get(entry.id);
+    if (!theirs || theirs.categoryId !== entry.categoryId) return entry;
+    seen.add(entry.id);
+    return pickVersion(entry, theirs);
+  });
+  const added = page.filter((e) => !seen.has(e.id) && !local.some((l) => l.id === e.id));
+  return added.length === 0 && merged.every((e, i) => e === local[i]) ? local : [...added, ...merged];
 }
 
 export interface LayoutBackup {
