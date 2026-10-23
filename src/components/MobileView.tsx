@@ -108,24 +108,28 @@ export const MobileView: React.FC<MobileViewProps> = ({
   const [pageError, setPageError] = useState<string | null>(null);
   const [atListEnd, setAtListEnd] = useState(false);
   const listEndRef = useRef<HTMLDivElement | null>(null);
-  const loadingFor = useRef<string | null>(null);
+  // Each load gets a number; a load whose number is no longer current (the category changed, the
+  // sign-in changed, or the list was reset) is ignored when it finishes.
+  const loadSeq = useRef(0);
+  const loadInFlight = useRef(false);
   const recent = allEntries.slice(0, shown);
 
   const loadPage = useCallback(
     async (categoryId: string, from: SheetCursor) => {
-      if (!onLoadEntriesPage || loadingFor.current) return;
-      loadingFor.current = categoryId;
+      if (!onLoadEntriesPage || loadInFlight.current) return;
+      const seq = ++loadSeq.current;
+      loadInFlight.current = true;
       setPageLoading(true);
       setPageError(null);
       try {
         const next = await onLoadEntriesPage(categoryId, typeof from === 'number' ? from : null);
-        if (loadingFor.current !== categoryId) return; // switched category meanwhile
+        if (seq !== loadSeq.current) return; // reset meanwhile
         setCursor(next === undefined ? 'offline' : next === null ? 'end' : next);
       } catch (err: any) {
-        if (loadingFor.current === categoryId) setPageError(err?.message || 'Could not load entries from the sheet');
+        if (seq === loadSeq.current) setPageError(err?.message || 'Could not load entries from the sheet');
       } finally {
-        if (loadingFor.current === categoryId) {
-          loadingFor.current = null;
+        if (seq === loadSeq.current) {
+          loadInFlight.current = false;
           setPageLoading(false);
         }
       }
@@ -135,7 +139,8 @@ export const MobileView: React.FC<MobileViewProps> = ({
 
   // Opening a category reads its newest page, so recent edits made elsewhere (e.g. mdlife) show up.
   useEffect(() => {
-    loadingFor.current = null;
+    loadSeq.current++;
+    loadInFlight.current = false;
     setShown(LIST_STEP);
     setCursor('start');
     setPageLoading(false);
