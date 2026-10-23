@@ -19,6 +19,8 @@ export interface MonthlyReport {
   counts: { category: CategoryDef; count: number }[];
   avgMood: number | null;
   moodPoints: { date: string; score: number }[];
+  /** Distinct days with at least one mood entry. */
+  moodDays: number;
   ratingAverages: { category: CategoryDef; label: string; avg: number; min: number; max: number; n: number }[];
   selectBreakdowns: { category: CategoryDef; label: string; counts: [string, number][] }[];
   chaptersThisMonth: number;
@@ -49,6 +51,7 @@ export function buildMonthlyReport(categories: CategoryDef[], entries: Entry[], 
           .sort((a, b) => a.date.localeCompare(b.date))
       : [];
   const avgMood = average(moodPoints.map((p) => p.score));
+  const moodDays = new Set(moodPoints.map((p) => p.date)).size;
 
   const ratingAverages: MonthlyReport['ratingAverages'] = [];
   const selectBreakdowns: MonthlyReport['selectBreakdowns'] = [];
@@ -94,7 +97,7 @@ export function buildMonthlyReport(categories: CategoryDef[], entries: Entry[], 
     if (avgMood !== null) {
       const lo = Math.min(...moodPoints.map((p) => p.score));
       const hi = Math.max(...moodPoints.map((p) => p.score));
-      summary.push(`Mood averaged ${avgMood.toFixed(1)}/10 over ${moodPoints.length} day${moodPoints.length === 1 ? '' : 's'} (range ${lo}–${hi}).`);
+      summary.push(`Mood averaged ${avgMood.toFixed(1)}/10 over ${moodDays} day${moodDays === 1 ? '' : 's'} (range ${lo}–${hi}).`);
     }
     for (const r of ratingAverages) {
       summary.push(`${r.category.label}: average ${r.label.toLowerCase()} ${r.avg.toFixed(1)}/${r.max} over ${r.n} entr${r.n === 1 ? 'y' : 'ies'}.`);
@@ -102,7 +105,7 @@ export function buildMonthlyReport(categories: CategoryDef[], entries: Entry[], 
     if (chaptersThisMonth > 0) summary.push(`Studied ${chaptersThisMonth} Bible chapter${chaptersThisMonth === 1 ? '' : 's'}.`);
   }
 
-  return { month, total, counts, avgMood, moodPoints, ratingAverages, selectBreakdowns, chaptersThisMonth, summary };
+  return { month, total, counts, avgMood, moodPoints, moodDays, ratingAverages, selectBreakdowns, chaptersThisMonth, summary };
 }
 
 export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ config, entries, onSyncReportToSheet, isSyncingReport }) => {
@@ -219,7 +222,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ config, en
         </div>
         <div className="bg-[#131520] p-4 rounded-3xl border border-stone-800 space-y-1">
           <span className="text-xs font-bold text-stone-300">Days with mood</span>
-          <span className="block text-3xl font-black text-white">{report.moodPoints.length}</span>
+          <span className="block text-3xl font-black text-white">{report.moodDays}</span>
         </div>
         <div className="bg-[#131520] p-4 rounded-3xl border border-stone-800 space-y-1">
           <span className="text-xs font-bold text-stone-300">Bible chapters studied</span>
