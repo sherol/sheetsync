@@ -220,6 +220,9 @@ SheetSync keeps a copy on the device, sends every entry to your Google Sheet, an
 - **Entries load page by page:** SheetSync doesn't download the whole sheet. Opening a category reads its newest 25 rows from the sheet, and scrolling to the end of the list reads the next 25 older rows, until the top of the tab.
   - Rows on a page are merged into the device by ID, and the newer **Saved At** wins. That brings in entries from other devices and edits made in mdlife or directly in Google Sheets.
   - Entries that have been loaded stay on the device. Entries you haven't scrolled to aren't loaded, so the home screen counts and monthly reports only include entries on this device.
+  - If rows are inserted or deleted in the sheet while you scroll, SheetSync finds the last row it read again by its ID and carries on from there (or starts again from the newest rows if that row was deleted), so no entry is skipped or listed twice.
+  - Resetting the sheet or loading a backup starts the open category's list again from the newest rows.
+  - If Google can't read a tab for any reason other than the tab not existing, the list shows the error instead of stopping quietly.
 - **In the sheet:** each row has **ID**, **Saved At**, then one column per field in the studio's order.
   - Rows are matched by ID, so editing an entry updates its row.
   - Text is stored exactly as typed. For example, chapters like `1-3` stay text instead of turning into a date.

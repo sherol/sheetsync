@@ -63,6 +63,12 @@ function quoteTab(sheetName: string): string {
   return `'${sheetName.replace(/'/g, "''")}'`;
 }
 
+/** Where the next (older) page of a tab ends: the top row of the page before it, and that row's ID. */
+export interface PageCursor {
+  row: number;
+  id: string;
+}
+
 function rowRange(sheetName: string, row: number, width: number): string {
   return `${quoteTab(sheetName)}!A${row}:${columnLetter(width)}${row}`;
 }
@@ -344,43 +350,69 @@ export class SheetsService {
 
   /**
    * Read one page of a tab, newest rows first: new entries are appended at the bottom, so a page is
-   * the pageSize rows just above `before` (a row number), or the last rows of the tab when `before`
-   * is null. Returns the header row followed by the page, and the `before` for the next (older)
-   * page, or null when the page reaches the top. A missing tab reads as empty.
+   * the pageSize rows just above `before`, or the last rows of the tab when `before` is null.
+   * Returns the header row followed by the page, and the `before` for the next (older) page, or
+   * null when the page reaches the top. A missing tab reads as empty.
+   *
+   * `before` is the top row of the previous page together with its ID. Rows inserted or deleted
+   * above it (in Google Sheets or mdlife) move it, so the row is read again with the page: if it no
+   * longer holds that ID, the ID is looked up in the ID column and the page is read above its new
+   * row. If the ID is gone, paging starts again from the bottom (rows already on the device are
+   * matched by ID, so nothing is added twice).
    */
   static async readPage(
     accessToken: string,
     spreadsheetId: string,
     sheetName: string,
-    before: number | null,
+    before: PageCursor | null,
     pageSize: number
-  ): Promise<{ rows: string[][]; next: number | null }> {
+  ): Promise<{ rows: string[][]; next: PageCursor | null }> {
     const batchGet = async (ranges: string[]): Promise<string[][][] | null> => {
       const params = new URLSearchParams({ valueRenderOption: 'FORMATTED_VALUE', majorDimension: 'ROWS' });
       ranges.forEach((r) => params.append('ranges', r));
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (res.status === 400) return null; // no such tab
+      // A range on a tab that doesn't exist: Google answers 400 "Unable to parse range: ...".
+      if (res.status === 400 && /Unable to parse range/i.test(await res.clone().text())) return null;
       if (!res.ok) throw await failure(res, `Could not read ${sheetName}`);
       const data = await res.json();
       return (data.valueRanges || []).map((vr: any) => (vr.values || []).map((row: any[]) => row.map((c) => String(c ?? ''))));
     };
     const tab = quoteTab(sheetName);
+    const readIds = async () => (await batchGet([`${tab}!A:A`]))?.[0] ?? null;
 
-    let end = before === null ? 0 : before - 1;
-    if (before === null) {
-      // The ID column tells where the last row is (Sheets leaves trailing empty rows out).
-      const ids = await batchGet([`${tab}!A:A`]);
-      if (!ids) return { rows: [], next: null };
-      end = ids[0].length;
+    let cursor = before;
+    for (let attempt = 0; ; attempt++) {
+      let end: number;
+      if (cursor === null) {
+        // The ID column tells where the last row is (Sheets leaves trailing empty rows out).
+        const ids = await readIds();
+        if (!ids) return { rows: [], next: null };
+        end = ids.length;
+      } else {
+        end = cursor.row - 1;
+      }
+      if (end < 2) return { rows: [], next: null };
+      const start = Math.max(2, end - pageSize + 1);
+      // With a cursor, also read its row to check it still holds the same entry.
+      const got = await batchGet([`${tab}!1:1`, `${tab}!${start}:${cursor ? cursor.row : end}`]);
+      if (!got) return { rows: [], next: null };
+      const [header = [], rows = []] = got;
+      const page = rows.slice(0, end - start + 1);
+
+      if (cursor && (rows[cursor.row - start]?.[0] ?? '') !== cursor.id) {
+        // Moved: find its new row once; if it's gone (or moved again), start from the bottom.
+        const id = cursor.id;
+        const at = attempt === 0 && id ? ((await readIds()) ?? []).findIndex((r, i) => i > 0 && r[0] === id) : -1;
+        cursor = at > 0 ? { row: at + 1, id } : null;
+        continue;
+      }
+      return {
+        rows: [header[0] ?? [], ...page],
+        next: start > 2 ? { row: start, id: page[0]?.[0] ?? '' } : null,
+      };
     }
-    if (end < 2) return { rows: [], next: null };
-    const start = Math.max(2, end - pageSize + 1);
-    const got = await batchGet([`${tab}!1:1`, `${tab}!${start}:${end}`]);
-    if (!got) return { rows: [], next: null };
-    const [header = [], page = []] = got;
-    return { rows: [header[0] ?? [], ...page], next: start > 2 ? start : null };
   }
 
   /**

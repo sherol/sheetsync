@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Send, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, X, ExternalLink, AlertCircle, Loader2 } from 'lucide-react';
 import { AppConfig, CategoryDef, Entry, QuickPick } from '../types';
+import type { PageCursor } from '../services/sheetsService';
 import { SquirrelIcon } from './SquirrelIcon';
 import { CategoryIcon } from './CategoryIcon';
 import { FieldInput } from './FieldInput';
@@ -21,14 +22,14 @@ interface MobileViewProps {
    * newest page, then whatever the previous call returned. Resolves to the next page's `before`,
    * null when there are no older rows, or undefined when the sheet isn't connected.
    */
-  onLoadEntriesPage?: (categoryId: string, before: number | null) => Promise<number | null | undefined>;
+  onLoadEntriesPage?: (categoryId: string, before: PageCursor | null) => Promise<PageCursor | null | undefined>;
 }
 
 // Entries shown per step as the list scrolls.
 const LIST_STEP = 25;
 
-/** Where paging through the sheet has got to: 'start' = nothing read yet, a row number, or 'end'. */
-type SheetCursor = 'start' | number | 'end' | 'offline';
+/** Where paging through the sheet has got to: 'start' = nothing read yet, the next page's cursor, or 'end'. */
+type SheetCursor = 'start' | PageCursor | 'end' | 'offline';
 
 const localToday = () => new Date().toLocaleDateString('en-CA');
 const localTime = () => new Date().toTimeString().slice(0, 5);
@@ -122,7 +123,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
       setPageLoading(true);
       setPageError(null);
       try {
-        const next = await onLoadEntriesPage(categoryId, typeof from === 'number' ? from : null);
+        const next = await onLoadEntriesPage(categoryId, typeof from === 'object' ? from : null);
         if (seq !== loadSeq.current) return; // reset meanwhile
         setCursor(next === undefined ? 'offline' : next === null ? 'end' : next);
       } catch (err: any) {
@@ -159,7 +160,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
   useEffect(() => {
     if (!atListEnd || !category || pageLoading || pageError) return;
     if (shown < allEntries.length) setShown((n) => n + LIST_STEP);
-    else if (cursor === 'start' || typeof cursor === 'number') void loadPage(category.id, cursor);
+    else if (cursor === 'start' || typeof cursor === 'object') void loadPage(category.id, cursor);
   }, [atListEnd, shown, allEntries.length, cursor, pageLoading, pageError, category, loadPage]);
 
   const shellClass = `flex flex-col bg-[#0b0c10] text-stone-100 ${

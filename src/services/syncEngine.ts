@@ -1,5 +1,5 @@
 import { AppConfig, Entry, CategoryDef } from '../types';
-import { SheetsAuthError, SheetsService } from './sheetsService';
+import { PageCursor, SheetsAuthError, SheetsService } from './sheetsService';
 import { INITIAL_CONFIG, SCHEMA_VERSION } from './storageService';
 import { DEFAULT_CATEGORIES, DEFAULT_LISTS } from '../config/categories';
 import { isUnsent, layoutDirection, mergeEntries, parseLayoutBackup, readChangedFlag, rowsToEntries, mergePage } from './syncLogic';
@@ -158,10 +158,10 @@ export async function loadEntriesPage({
   token: string;
   sheetId: string;
   category: CategoryDef;
-  before: number | null;
+  before: PageCursor | null;
   updateEntries: (fn: (e: Entry[]) => Entry[]) => void;
   pageSize?: number;
-}): Promise<number | null> {
+}): Promise<PageCursor | null> {
   const { rows, next } = await SheetsService.readPage(token, sheetId, category.sheetName, before, pageSize);
   const page = rowsToEntries(category, rows, sheetId);
   if (page.length > 0) updateEntries((local) => mergePage(local, page));

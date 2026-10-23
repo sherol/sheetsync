@@ -188,7 +188,14 @@ export function mergePage(local: Entry[], page: Entry[]): Entry[] {
     seen.add(entry.id);
     return pickVersion(entry, theirs);
   });
-  const added = page.filter((e) => !seen.has(e.id) && !local.some((l) => l.id === e.id));
+  // Each ID is added once, even if it is already on the device in another category or appears
+  // twice on the page.
+  const localIds = new Set(local.map((l) => l.id));
+  const added = page.filter((e) => {
+    if (seen.has(e.id) || localIds.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
   return added.length === 0 && merged.every((e, i) => e === local[i]) ? local : [...added, ...merged];
 }
 
