@@ -68,6 +68,30 @@ SheetSync starts with ten categories. Each one is a tab in the app and a tab in 
 
 You can rename, recolour, reorder, add and delete categories and their fields in [Category Studio](#category-studio).
 
+### Category types
+
+The categories fall into four types, depending on how you log in them:
+
+| Type | What it records | Categories | How it's set up |
+|---|---|---|---|
+| **Diary** | What happened and how it felt | Mood, Memories, Prayer | A required date and mostly notes fields; about one entry per day or event |
+| **Log** | What you took or did, when, and how much | Medicine | Date and time, amounts, 1–10 ratings and quick picks; many entries a day |
+| **Inventory** | One row per thing, kept current | Meals, People, Media | Named by title or name; a "last" date (Last Cooked, Last Contact) that you update by editing the entry |
+| **Work** | What you're making | Projects, Prototypes, Presentations | Links fields, connected through the [Projects list](#projects-list) |
+
+Some categories fit two types. Prayer is a diary, but its Answered field and the [Bible study tracker](#bible-study-tracker) also track progress. Media works like a log, one entry per thing you finish, but each entry also serves as a catalog entry for that title.
+
+### Ideas for new categories
+
+None of the default categories are about what's coming next. Two you could add in Category Studio:
+
+| Category · full title | Type | Fields |
+|---|---|---|
+| **Goals** · Goals & Habits | Work | Goal (required), Related Projects (from the Projects list, multiple), Target Date, Status (Not started / Active / Done / Dropped), Check-in |
+| **Wishlist** · Wishlist & Queue | Inventory | Title (required), Type (Book / Movie / TV / Game / Album), Recommended By, Priority (High / Medium / Low), Links |
+
+Wishlist works as a queue for Media: once you finish something, log it in Media. When you set up a new category, match its type. Give a log a time field and quick picks, give an inventory a "last" date, and link work categories to the Projects list.
+
 ## Logging entries
 
 The app opens on a **home list** of every category, top to bottom. Each row shows how many entries the category has and the date of the latest one.
